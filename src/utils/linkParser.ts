@@ -2,7 +2,7 @@ interface VmessConfig {
   v: string;
   ps: string;
   add: string;
-  port: number;
+  port: string;
   id: string;
   aid: string;
   net: string;
@@ -15,7 +15,7 @@ interface VmessConfig {
 interface VlessConfig {
   id: string;
   address: string;
-  port: number;
+  port: string;
   encryption?: string;
   flow?: string;
   security?: string;
