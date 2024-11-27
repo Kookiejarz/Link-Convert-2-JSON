@@ -62,6 +62,257 @@ interface TransportConfig {
   permit_without_stream?: boolean;
 }
 
+interface SingBoxConfig {
+  log: LogConfig;
+  dns: DnsConfig;
+  route: RouteConfig;
+  inbounds: InboundConfig[];
+  outbounds: OutboundConfig[];
+  experimental: ExperimentalConfig;
+}
+
+// 基础配置接口
+interface LogConfig {
+  level: string;
+  disabled: boolean;
+  timestamp: boolean;
+}
+
+interface DnsConfig {
+  servers: DnsServer[];
+  rules: DnsRule[];
+  disable_cache: boolean;
+  disable_expire: boolean;
+  final: string;
+  strategy: string;
+}
+
+interface RouteConfig {
+  final: string;
+  auto_detect_interface: boolean;
+  rule_set: RuleSet[];
+  rules: RouteRule[];
+}
+
+// 创建 DNS 配置
+const createDnsConfig = (): DnsConfig => {
+  return {
+    servers: [
+      {
+        address: "https://223.5.5.5/dns-query",
+        detour: "➡️直连",
+        tag: "alidns",
+        strategy: "prefer_ipv4"
+      },
+      {
+        address: "https://1.1.1.1/dns-query",
+        detour: "🌐代理",
+        tag: "cloudflare",
+        strategy: "prefer_ipv4"
+      },
+      {
+        address: "rcode://success",
+        tag: "block"
+      }
+    ],
+    rules: [
+      {
+        type: "logical",
+        mode: "or",
+        rules: [
+          { outbound: ["any"] },
+          { clash_mode: "Direct" },
+          { rule_set: ["geosite-cn", "geosite-private"] },
+          { domain_suffix: [".cn"] }
+        ],
+        server: "alidns"
+      },
+      {
+        server: "cloudflare",
+        clash_mode: "Global"
+      },
+      {
+        server: "block",
+        rule_set: ["geosite-category-ads-all"]
+      }
+    ],
+    disable_cache: false,
+    disable_expire: false,
+    final: "cloudflare",
+    strategy: "prefer_ipv4"
+  };
+};
+
+// 创建路由配置
+const createRouteConfig = (): RouteConfig => {
+  return {
+    final: "🌐代理",
+    auto_detect_interface: true,
+    rule_set: createRuleSets(),
+    rules: createRouteRules()
+  };
+};
+
+const createProxyOutbound = (proxyConfig: any): any => {
+  // 基础配置
+  const baseConfig = {
+    tag: proxyConfig.tag,
+    type: proxyConfig.type,
+    server: proxyConfig.server,
+    server_port: proxyConfig.server_port
+  };
+
+  // 根据协议类型添加特定配置
+  switch (proxyConfig.type) {
+    case 'vmess':
+      return {
+        ...baseConfig,
+        uuid: proxyConfig.uuid,
+        security: proxyConfig.security,
+        alter_id: proxyConfig.alterId,
+        ...(proxyConfig.tls && {
+          tls: {
+            enabled: proxyConfig.tls.enabled,
+            server_name: proxyConfig.tls.server_name,
+            insecure: proxyConfig.tls.insecure,
+            alpn: proxyConfig.tls.alpn,
+            ...(proxyConfig.tls.utls && {
+              utls: {
+                enabled: proxyConfig.tls.utls.enabled,
+                fingerprint: proxyConfig.tls.utls.fingerprint
+              }
+            })
+          }
+        }),
+        ...(proxyConfig.transport && {
+          transport: {
+            type: proxyConfig.transport.type,
+            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
+            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
+            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
+          }
+        })
+      };
+
+    case 'vless':
+      return {
+        ...baseConfig,
+        uuid: proxyConfig.uuid,
+        flow: proxyConfig.flow || '',
+        ...(proxyConfig.tls && {
+          tls: {
+            enabled: proxyConfig.tls.enabled,
+            server_name: proxyConfig.tls.server_name,
+            insecure: proxyConfig.tls.insecure,
+            alpn: proxyConfig.tls.alpn,
+            ...(proxyConfig.tls.utls && {
+              utls: {
+                enabled: proxyConfig.tls.utls.enabled,
+                fingerprint: proxyConfig.tls.utls.fingerprint
+              }
+            })
+          }
+        }),
+        ...(proxyConfig.transport && {
+          transport: {
+            type: proxyConfig.transport.type,
+            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
+            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
+            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
+          }
+        })
+      };
+
+    case 'shadowsocks':
+      return {
+        ...baseConfig,
+        method: proxyConfig.method,
+        password: proxyConfig.password,
+        ...(proxyConfig.plugin && { plugin: proxyConfig.plugin }),
+        ...(proxyConfig.plugin_opts && { plugin_opts: proxyConfig.plugin_opts }),
+        ...(proxyConfig.tls && {
+          tls: {
+            enabled: proxyConfig.tls.enabled,
+            server_name: proxyConfig.tls.server_name,
+            insecure: proxyConfig.tls.insecure,
+            alpn: proxyConfig.tls.alpn,
+            ...(proxyConfig.tls.utls && {
+              utls: {
+                enabled: proxyConfig.tls.utls.enabled,
+                fingerprint: proxyConfig.tls.utls.fingerprint
+              }
+            })
+          }
+        }),
+        ...(proxyConfig.transport && {
+          transport: {
+            type: proxyConfig.transport.type,
+            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
+            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
+            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
+          }
+        })
+      };
+
+    default:
+      return baseConfig;
+  }
+};
+
+// 在 createOutbounds 函数中使用
+const createOutbounds = (proxyConfigs: any[]): OutboundConfig[] => {
+  const baseOutbounds = [
+    {
+      tag: "➡️直连",
+      type: "direct"
+    },
+    {
+      tag: "block",
+      type: "block"
+    },
+    {
+      tag: "dns-out",
+      type: "dns"
+    }
+  ];
+    // 转换代理节点配置
+    const proxyOutbounds = proxyConfigs.map(config => createProxyOutbound(config));
+
+    // 添加选择器和自动测试
+    const selectorOutbounds = createSelectorOutbounds(proxyConfigs);
+  
+    return [...baseOutbounds, ...proxyOutbounds, ...selectorOutbounds];
+};
+
+export const createFullConfig = (proxyConfigs: any[]): SingBoxConfig => {
+  return {
+    log: {
+      level: "info",
+      disabled: false,
+      timestamp: true
+    },
+    dns: createDnsConfig(),
+    route: createRouteConfig(),
+    inbounds: createInbounds(),
+    outbounds: createOutbounds(proxyConfigs),
+    experimental: {
+      cache_file: {
+        path: "cache.db",
+        cache_id: "cache_id",
+        store_fakeip: true,
+        enabled: true
+      },
+      clash_api: {
+        external_controller: "localhost:9090",
+        external_ui_download_url: "",
+        secret: "",
+        default_mode: "",
+        external_ui_download_detour: "",
+        external_ui: "ui"
+      }
+    }
+  };
+};
 
 const randomUTlsFingerprint = (): string => {
   const fingerprints = [
