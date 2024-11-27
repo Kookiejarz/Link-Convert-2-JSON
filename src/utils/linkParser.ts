@@ -94,6 +94,168 @@ interface RouteConfig {
   rules: RouteRule[];
 }
 
+interface DnsServer {
+  address: string;
+  detour?: string;
+  tag?: string;
+  strategy?: string;
+}
+
+interface DnsRule {
+  type?: string;
+  mode?: string;
+  rules?: any[];
+  server?: string;
+  rule_set?: string[];
+  domain_suffix?: string[];
+  outbound?: string[];
+  clash_mode?: string;
+}
+
+interface RuleSet {
+  format: string;
+  tag: string;
+  type: string;
+  url: string;
+  download_detour: string;
+}
+
+interface RouteRule {
+  protocol?: string;
+  outbound?: string;
+  type?: string;
+  mode?: string;
+  rules?: any[];
+  domain?: string[];
+  domain_suffix?: string[];
+  domain_keyword?: string[];
+  ip_is_private?: boolean;
+  network?: string[];
+  rule_set?: string[];
+  clash_mode?: string;
+}
+
+interface InboundConfig {
+  type: string;
+  tag: string;
+  listen?: string;
+  listen_port?: number;
+  tcp_fast_open?: boolean;
+  udp_fragment?: boolean;
+  sniff?: boolean;
+  sniff_override_destination?: boolean;
+  set_system_proxy?: boolean;
+  strict_route?: boolean;
+  stack?: string;
+  domain_strategy?: string;
+  udp_timeout?: number;
+  interface_name?: string;
+  mtu?: number;
+  auto_route?: boolean;
+  sniff_timeout?: string;
+  address?: string[];
+}
+
+interface OutboundConfig {
+  tag: string;
+  type: string;
+  server?: string;
+  server_port?: number;
+  uuid?: string;
+  security?: string;
+  alter_id?: number;
+  flow?: string;
+  method?: string;
+  password?: string;
+  plugin?: string;
+  plugin_opts?: any;
+  tls?: TlsConfig;
+  transport?: TransportConfig;
+  outbounds?: string[];
+  default?: string;
+  interval?: string;
+  interrupt_exist_connections?: boolean;
+  url?: string;
+  tolerance?: number;
+}
+
+const createRuleSets = (): RuleSet[] => {
+  return [
+    {
+      format: "binary",
+      tag: "geoip-cn",
+      type: "remote",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+      download_detour: "🌐代理"
+    },
+    {
+      format: "binary",
+      tag: "geosite-cn",
+      type: "remote",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+      download_detour: "🌐代理"
+    },
+    {
+      format: "binary",
+      tag: "geosite-private",
+      type: "remote",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-private.srs",
+      download_detour: "🌐代理"
+    },
+    {
+      format: "binary",
+      tag: "geosite-category-ads-all",
+      type: "remote",
+      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
+      download_detour: "🌐代理"
+    }
+  ];
+};
+
+const createRouteRules = (): RouteRule[] => {
+  return [
+    {
+      protocol: "dns",
+      outbound: "dns-out"
+    },
+    {
+      type: "logical",
+      mode: "or",
+      rules: [
+        { ip_is_private: true },
+        { domain_keyword: ["baidu","bilibili"] },
+        { domain_suffix: ["qq.com"] },
+        { rule_set: ["geosite-private"] },
+        { clash_mode: "Direct" }
+      ],
+      outbound: "➡️直连"
+    },
+    {
+      type: "logical",
+      mode: "or",
+      rules: [
+        { domain: ["google.com", "youtube.com"] },
+        { rule_set: ["geosite-tiktok","geosite-openai"] },
+        { clash_mode: "Global" }
+      ],
+      outbound: "🌐代理"
+    },
+    {
+      domain_suffix: [".cn"],
+      rule_set: ["geoip-cn", "geosite-cn"],
+      outbound: "🇨🇳国内"
+    },
+    {
+      network: ["udp"],
+      outbound: "🏄🏼‍♀️UDP"
+    },
+    {
+      outbound: "block",
+      rule_set: ["geosite-category-ads-all"]
+    }
+  ];
+};
+
 // 创建 DNS 配置
 const createDnsConfig = (): DnsConfig => {
   return {
