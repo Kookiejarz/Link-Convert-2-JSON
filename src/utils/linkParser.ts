@@ -256,6 +256,41 @@ const createRouteRules = (): RouteRule[] => {
   ];
 };
 
+// 添加在其他函数定义后面
+const createInbounds = (): InboundConfig[] => {
+  return [
+    {
+      type: "mixed",
+      tag: "mixed-in",
+      listen: "::",
+      listen_port: 5353,
+      tcp_fast_open: true,
+      udp_fragment: true,
+      sniff: true,
+      sniff_override_destination: true,
+      set_system_proxy: true
+    }
+  ];
+};
+
+// 添加在其他接口定义区域
+interface ExperimentalConfig {
+  cache_file: {
+    path: string;
+    cache_id: string;
+    store_fakeip: boolean;
+    enabled: boolean;
+  };
+  clash_api: {
+    external_controller: string;
+    external_ui_download_url: string;
+    secret: string;
+    default_mode: string;
+    external_ui_download_detour: string;
+    external_ui: string;
+  };
+}
+
 // 创建 DNS 配置
 const createDnsConfig = (): DnsConfig => {
   return {
@@ -799,6 +834,7 @@ const createSelectorOutbounds = (proxyConfigs: any[]): any[] => {
     }
   ];
 };
+
 
 // 添加主函数
 export const handleLinks = (links: string[]): string => {
