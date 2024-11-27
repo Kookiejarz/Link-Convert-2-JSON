@@ -269,6 +269,21 @@ const createInbounds = (): InboundConfig[] => {
       sniff: true,
       sniff_override_destination: true,
       set_system_proxy: true
+    },
+    {
+      strict_route: true,
+      stack: "system",
+      domain_strategy: "",
+      sniff: true,
+      udp_timeout: 300,
+      interface_name: "utun",
+      type: "tun",
+      mtu: 1420,
+      auto_route: true,
+      sniff_timeout: "300ms",
+      address: ["172.19.0.1/30"],
+      sniff_override_destination: true,
+      tag: "tun-in"
     }
   ];
 };
@@ -821,10 +836,9 @@ const createSelectorOutbounds = (proxyConfigs: any[]): any[] => {
 };
 
 
-// 添加主函数
 export const handleLinks = (links: string[]): string => {
   try {
-    // 解析所有链接
+    // Parse all links into proxy configurations
     const proxyConfigs = links
       .map(link => parseLink(link))
       .filter(config => config !== null);
@@ -833,10 +847,10 @@ export const handleLinks = (links: string[]): string => {
       throw new Error('No valid proxy configurations found');
     }
 
-    // 创建完整配置
+    // Create the full configuration
     const fullConfig = createFullConfig(proxyConfigs);
 
-    // 返回格式化的 JSON 字符串
+    // Return the full configuration as a formatted JSON string
     return JSON.stringify(fullConfig, null, 2);
   } catch (error) {
     console.error('Error handling links:', error);
