@@ -2,7 +2,7 @@ interface VmessConfig {
   v: string;
   ps: string;
   add: string;
-  port: string;
+  port: number;
   id: string;
   aid: string;
   net: string;
@@ -15,7 +15,7 @@ interface VmessConfig {
 interface VlessConfig {
   id: string;
   address: string;
-  port: string;
+  port: number;
   encryption?: string;
   flow?: string;
   security?: string;
@@ -55,7 +55,7 @@ export const parseVmessLink = (link: string): object | null => {
       type: "vmess",
       tag: vmessConfig.ps || "vmess-link",
       server: vmessConfig.add,
-      server_port: parseInt(vmessConfig.port, 10),
+      server_port: parseInt(vmessConfig.port, 10) || 443,
       uuid: vmessConfig.id,
       alterId: parseInt(vmessConfig.aid, 10),
       network: vmessConfig.net,
@@ -100,7 +100,7 @@ export const parseVlessLink = (link: string): object | null => {
       type: "vless",
       tag: tag,
       server: address,
-      server_port: parseInt(port, 10) || "443",
+      server_port: parseInt(port, 10) || 443,
       uuid: uuid,
       encryption: encryption || "none",
       flow: params.flow || "",
