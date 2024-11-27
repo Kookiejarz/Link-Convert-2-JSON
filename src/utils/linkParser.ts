@@ -35,6 +35,49 @@ interface ShadowsocksConfig {
   plugin_opts?: string;
 }
 
+interface TlsConfig {
+  enabled: boolean;
+  server_name: string;
+  insecure: boolean;
+  alpn: string[];
+  min_version: string;
+  max_version: string;
+  cipher_suites: string[];
+  utls?: {
+    enabled: boolean;
+    fingerprint: string;
+  };
+}
+
+interface TransportConfig {
+  type: string;
+  path?: string;
+  headers?: {
+    Host: string;
+  };
+  service_name?: string;
+  idle_timeout?: string;
+  ping_timeout?: string;
+  permit_without_stream?: boolean;
+}
+
+
+const randomUTlsFingerprint = (): string => {
+  const fingerprints = [
+    "chrome",
+    "firefox",
+    "safari",
+    "ios",
+    "android",
+    "edge",
+    "360",
+    "qq",
+    "random",
+    "randomized"
+  ];
+  return fingerprints[Math.floor(Math.random() * fingerprints.length)];
+};
+
 export const parseLink = (link: string): object | null => {
   if (link.startsWith('vmess://')) {
     return parseVmessLink(link);
@@ -161,6 +204,7 @@ export const parseVlessLink = (link: string) => {
     const [uuid] = url.username.split(':');
     const params = Object.fromEntries(url.searchParams);
     const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
+    const fp = decodeURIComponent(url.hash.replace('fp=', '')  || randomUTlsFingerprint());
 
     return {
       type: "vless",
@@ -182,47 +226,6 @@ export const parseVlessLink = (link: string) => {
   }
 };
 
-interface TlsConfig {
-  enabled: boolean;
-  server_name: string;
-  insecure: boolean;
-  alpn: string[];
-  min_version: string;
-  max_version: string;
-  cipher_suites: string[];
-  utls?: {
-    enabled: boolean;
-    fingerprint: string;
-  };
-}
-
-interface TransportConfig {
-  type: string;
-  path?: string;
-  headers?: {
-    Host: string;
-  };
-  service_name?: string;
-  idle_timeout?: string;
-  ping_timeout?: string;
-  permit_without_stream?: boolean;
-}
-
-const randomUTlsFingerprint = (): string => {
-  const fingerprints = [
-    "chrome",
-    "firefox",
-    "safari",
-    "ios",
-    "android",
-    "edge",
-    "360",
-    "qq",
-    "random",
-    "randomized"
-  ];
-  return fingerprints[Math.floor(Math.random() * fingerprints.length)];
-};
 
 const buildTlsConfig = (
   security: string | undefined, 
@@ -256,7 +259,7 @@ const buildTlsConfig = (
     ],
     utls: {
       enabled: true,
-      fingerprint: fingerprint || randomUTlsFingerprint()
+      fingerprint: fingerprint
     }
   };
 };
