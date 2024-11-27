@@ -7,9 +7,10 @@ interface VmessConfig {
   aid: string;
   net: string;
   type: string;
-  host: string;
-  path: string;
-  tls: string;
+  host?: string;  // Make optional
+  path?: string;  // Make optional
+  tls?: string;   // Make optional
+  scy?: string;   // Add security parameter
 }
 
 interface VlessConfig {
@@ -96,32 +97,72 @@ export const parseVmessLink = (link: string): object | null => {
     const decoded = atob(link.replace('vmess://', ''));
     const vmessConfig: VmessConfig = JSON.parse(decoded);
 
+    // Extract fingerprint from type parameter or use default
+    let fingerprint = 'chrome';
+    if (vmessConfig.type === 'randomized' || vmessConfig.type === 'random') {
+      fingerprint = randomUTlsFingerprint();
+    }
+
     const result = {
       type: "vmess",
       tag: vmessConfig.ps || "vmess-link",
       server: vmessConfig.add,
       server_port: parseInt(String(vmessConfig.port), 10),
       uuid: vmessConfig.id,
-      security: vmessConfig.scy || 'auto',
+      security: vmessConfig.security || 'auto',
       alterId: parseInt(vmessConfig.aid || '0', 10),
       network: vmessConfig.net,
+      tls: buildTlsConfig(vmessConfig.tls, vmessConfig.host, fingerprint),
+      transport: buildTransportConfig(
+        vmessConfig.net,
+        vmessConfig.path,
+        vmessConfig.host
+      )
     };
-
-    // Add TLS configuration if present
-    if (vmessConfig.tls) {
-      result['tls'] = buildTlsConfig(vmessConfig.tls, vmessConfig.host);
-    }
-
-    // Add transport configuration
-    result['transport'] = buildTransportConfig(
-      vmessConfig.net,
-      vmessConfig.path,
-      vmessConfig.host
-    );
 
     return result;
   } catch (error) {
     console.error('Error parsing Vmess link:', error);
+    return null;
+  }
+};
+
+export const parseVlessLink = (link: string): object | null => {
+  try {
+    if (!link.startsWith('vless://')) return null;
+    
+    const url = new URL(link);
+    const [uuid] = url.username.split(':');
+    const params = Object.fromEntries(url.searchParams);
+    
+    // Extract tag from hash
+    let tag = 'vless-link';
+    if (url.hash) {
+      tag = decodeURIComponent(url.hash.substring(1));
+    }
+
+    // Extract fingerprint from parameters
+    let fingerprint = params.fp || 'chrome';
+    if (fingerprint === 'randomized' || fingerprint === 'random') {
+      fingerprint = randomUTlsFingerprint();
+    }
+
+    return {
+      type: "vless",
+      tag: tag,
+      server: url.hostname,
+      server_port: parseInt(url.port, 10),
+      uuid: uuid,
+      flow: params.flow || "",
+      tls: buildTlsConfig(params.security, params.sni || url.hostname, fingerprint),
+      transport: buildTransportConfig(
+        params.type || "tcp",
+        params.path,
+        params.host
+      )
+    };
+  } catch (error) {
+    console.error('Error parsing Vless link:', error);
     return null;
   }
 };
@@ -151,6 +192,12 @@ export const parseShadowsocksLink = (link: string): object | null => {
     
     // Parse query parameters
     const params = Object.fromEntries(url.searchParams);
+    
+    // Extract fingerprint from parameters if exists
+    let fingerprint = params.fp || 'chrome';
+    if (fingerprint === 'randomized' || fingerprint === 'random') {
+      fingerprint = randomUTlsFingerprint();
+    }
 
     const result: any = {
       type: "shadowsocks",
@@ -175,7 +222,11 @@ export const parseShadowsocksLink = (link: string): object | null => {
           
           // Add TLS configuration if the plugin uses TLS
           if (pluginParams.get('tls') === 'true') {
-            result.tls = buildTlsConfig('tls', pluginParams.get('host'));
+            result.tls = buildTlsConfig(
+              'tls', 
+              pluginParams.get('host') || server,
+              fingerprint
+            );
           }
 
           // Add transport configuration
@@ -185,7 +236,34 @@ export const parseShadowsocksLink = (link: string): object | null => {
             pluginParams.get('host')
           );
           break;
+
+        case 'obfs-local':
+          // Handle obfs plugin
+          const obfsParams = new URLSearchParams(pluginOpts.join(';'));
+          result.plugin_opts = {
+            mode: obfsParams.get('obfs') || 'http',
+            host: obfsParams.get('obfs-host') || ''
+          };
+          break;
       }
+    }
+
+    // Add TLS configuration if security parameter exists
+    if (params.security === 'tls') {
+      result.tls = buildTlsConfig(
+        'tls',
+        params.sni || server,
+        fingerprint
+      );
+    }
+
+    // Add transport configuration if type parameter exists
+    if (params.type) {
+      result.transport = buildTransportConfig(
+        params.type,
+        params.path,
+        params.host
+      );
     }
 
     return result;
@@ -194,43 +272,10 @@ export const parseShadowsocksLink = (link: string): object | null => {
     return null;
   }
 };
-
-// Modify parseVlessLink to use the common builders
-export const parseVlessLink = (link: string) => {
-  try {
-    if (!link.startsWith('vless://')) return null;
-
-    const url = new URL(link);
-    const [uuid] = url.username.split(':');
-    const params = Object.fromEntries(url.searchParams);
-    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
-    const fp = decodeURIComponent(url.hash.replace('fp=', '')  || randomUTlsFingerprint());
-
-    return {
-      type: "vless",
-      tag: tag,
-      server: url.hostname,
-      server_port: parseInt(url.port, 10),
-      uuid: uuid,
-      flow: params.flow || "",
-      tls: buildTlsConfig(params.security, parms.fp, params.sni || url.hostname),
-      transport: buildTransportConfig(
-        params.type || "tcp",
-        params.path,
-        params.host
-      )
-    };
-  } catch (error) {
-    console.error('Error parsing Vless link:', error);
-    return null;
-  }
-};
-
-
 const buildTlsConfig = (
   security: string | undefined, 
   serverName: string | undefined,
-  fp?: string
+  fingerprint?: string
 ): TlsConfig => {
   return {
     enabled: security === "tls",
@@ -240,27 +285,22 @@ const buildTlsConfig = (
     min_version: "1.2",
     max_version: "1.3",
     cipher_suites: [
-      // TLS 1.3 Cipher Suites
       "TLS_AES_128_GCM_SHA256",
       "TLS_AES_256_GCM_SHA384",
       "TLS_CHACHA20_POLY1305_SHA256",
-      
-      // TLS 1.2 Cipher Suites
       "ECDHE-ECDSA-AES128-GCM-SHA256",
       "ECDHE-RSA-AES128-GCM-SHA256",
       "ECDHE-ECDSA-AES256-GCM-SHA384",
       "ECDHE-RSA-AES256-GCM-SHA384",
       "ECDHE-ECDSA-CHACHA20-POLY1305",
       "ECDHE-RSA-CHACHA20-POLY1305",
-      
-      // Additional suites
       "ECDHE-ECDSA-AES128-SHA256",
       "ECDHE-RSA-AES128-SHA256"
     ],
-    utls: {
+    utls: security === "tls" ? {
       enabled: true,
-      fingerprint: fp
-    }
+      fingerprint: fingerprint || randomUTlsFingerprint()
+    } : undefined
   };
 };
 
