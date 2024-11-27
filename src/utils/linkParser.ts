@@ -82,10 +82,10 @@ export const parseVmessLink = (link: string): object | null => {
 export const parseVlessLink = (link: string) => {
   try {
     const url = new URL(link);
-    const [uuid, encryption] = url.username.split('@');
-    const [address, port] = url.hostname.split(':');
+    const [uuid, encryption] = url.username.split(':');
+    const address = url.hostname;
+    const port = url.port;
     const params = Object.fromEntries(url.searchParams);
-    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
 
     // Determine if TLS is enabled
     const isTlsEnabled = params.security === "tls" || params.sni !== undefined;
