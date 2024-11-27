@@ -15,14 +15,14 @@ export const Header: React.FC = () => {
       </motion.div>
       <h1 className="text-3xl font-bold text-gray-900 mb-2">
         <TypewriterText 
-          text="Vmess/Vless Link Converter"
+          text="The Link Converter"
           delay={0.2}
           className="inline-block"
         />
       </h1>
       <p className="text-gray-600">
         <TypewriterText 
-          text="Convert your Vmess or Vless links into JSON configuration"
+          text="Convert your links into Sing-Box compatible configuration"
           delay={1}
           className="inline-block"
         />
