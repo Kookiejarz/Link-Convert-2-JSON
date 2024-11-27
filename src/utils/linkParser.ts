@@ -81,11 +81,16 @@ export const parseVmessLink = (link: string): object | null => {
 
 export const parseVlessLink = (link: string) => {
   try {
+    if (!link.startsWith('vless://')) {
+      throw new Error('Not a valid VLESS link');
+    }
+
     const url = new URL(link);
-    const [uuid, encryption] = url.username.split(':');
+    const [uuid] = url.username.split(':');
     const address = url.hostname;
-    const port = url.port;
+    const port = parseInt(url.port, 10);
     const params = Object.fromEntries(url.searchParams);
+    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
 
     // Determine if TLS is enabled
     const isTlsEnabled = params.security === "tls" || params.sni !== undefined;
@@ -118,11 +123,11 @@ export const parseVlessLink = (link: string) => {
     tlsConfig.min_version = "1.1";
     tlsConfig.max_version = "1.3";
 
-    return {
+    const config = {
       type: "vless",
       tag: tag,
       server: address,
-      server_port: parseInt(port,10) || 443,
+      server_port: port,
       uuid: uuid,
       flow: "",
       tls: tlsConfig,
@@ -132,6 +137,8 @@ export const parseVlessLink = (link: string) => {
         ...(params.path && { path: params.path })
       }
     };
+
+    return config;
   } catch (error) {
     console.error('Error parsing Vless link:', error);
     return null;
