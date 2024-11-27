@@ -213,7 +213,7 @@ export const parseVlessLink = (link: string) => {
       server_port: parseInt(url.port, 10),
       uuid: uuid,
       flow: params.flow || "",
-      tls: buildTlsConfig(params.security, params.sni || url.hostname),
+      tls: buildTlsConfig(params.security, parms.fp, params.sni || url.hostname),
       transport: buildTransportConfig(
         params.type || "tcp",
         params.path,
