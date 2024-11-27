@@ -48,7 +48,7 @@ function App() {
               <LinkInput 
                 link={link} 
                 setLink={setLink} 
-                placeholder="vmess:// or vless://"
+                placeholder="vmess:// or vless:// or ss://"
               />
 
               <AnimatePresence mode="wait">
