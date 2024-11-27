@@ -97,11 +97,8 @@ export const parseVmessLink = (link: string): object | null => {
     const decoded = atob(link.replace('vmess://', ''));
     const vmessConfig: VmessConfig = JSON.parse(decoded);
 
-    // Extract fingerprint from type parameter or use default
-    let fingerprint = 'chrome';
-    if (vmessConfig.type === 'randomized' || vmessConfig.type === 'random') {
-      fingerprint = randomUTlsFingerprint();
-    }
+    // Keep original fingerprint value
+    const fingerprint = vmessConfig.type || 'chrome';
 
     const result = {
       type: "vmess",
@@ -135,17 +132,13 @@ export const parseVlessLink = (link: string): object | null => {
     const [uuid] = url.username.split(':');
     const params = Object.fromEntries(url.searchParams);
     
-    // Extract tag from hash
     let tag = 'vless-link';
     if (url.hash) {
       tag = decodeURIComponent(url.hash.substring(1));
     }
 
-    // Extract fingerprint from parameters
-    let fingerprint = params.fp || 'chrome';
-    if (fingerprint === 'randomized' || fingerprint === 'random') {
-      fingerprint = randomUTlsFingerprint();
-    }
+    // Keep original fingerprint value
+    const fingerprint = params.fp || 'chrome';
 
     return {
       type: "vless",
@@ -190,14 +183,10 @@ export const parseShadowsocksLink = (link: string): object | null => {
     const port = parseInt(url.port, 10);
     const tag = decodeURIComponent(url.hash.replace('#', '') || 'shadowsocks-link');
     
-    // Parse query parameters
     const params = Object.fromEntries(url.searchParams);
     
-    // Extract fingerprint from parameters if exists
-    let fingerprint = params.fp || 'chrome';
-    if (fingerprint === 'randomized' || fingerprint === 'random') {
-      fingerprint = randomUTlsFingerprint();
-    }
+    // Keep original fingerprint value
+    const fingerprint = params.fp || 'chrome';
 
     const result: any = {
       type: "shadowsocks",
@@ -208,19 +197,15 @@ export const parseShadowsocksLink = (link: string): object | null => {
       password: password
     };
 
-    // Add plugin configuration if present
     if (params.plugin) {
       const [pluginName, ...pluginOpts] = params.plugin.split(';');
       result.plugin = pluginName;
       
-      // Handle specific plugins
       switch (pluginName) {
         case 'v2ray-plugin':
         case 'xray-plugin':
-          // Parse plugin options
           const pluginParams = new URLSearchParams(pluginOpts.join(';'));
           
-          // Add TLS configuration if the plugin uses TLS
           if (pluginParams.get('tls') === 'true') {
             result.tls = buildTlsConfig(
               'tls', 
@@ -229,7 +214,6 @@ export const parseShadowsocksLink = (link: string): object | null => {
             );
           }
 
-          // Add transport configuration
           result.transport = buildTransportConfig(
             pluginParams.get('mode') || 'ws',
             pluginParams.get('path'),
@@ -238,7 +222,6 @@ export const parseShadowsocksLink = (link: string): object | null => {
           break;
 
         case 'obfs-local':
-          // Handle obfs plugin
           const obfsParams = new URLSearchParams(pluginOpts.join(';'));
           result.plugin_opts = {
             mode: obfsParams.get('obfs') || 'http',
@@ -248,7 +231,6 @@ export const parseShadowsocksLink = (link: string): object | null => {
       }
     }
 
-    // Add TLS configuration if security parameter exists
     if (params.security === 'tls') {
       result.tls = buildTlsConfig(
         'tls',
@@ -257,7 +239,6 @@ export const parseShadowsocksLink = (link: string): object | null => {
       );
     }
 
-    // Add transport configuration if type parameter exists
     if (params.type) {
       result.transport = buildTransportConfig(
         params.type,
@@ -272,6 +253,7 @@ export const parseShadowsocksLink = (link: string): object | null => {
     return null;
   }
 };
+
 const buildTlsConfig = (
   security: string | undefined, 
   serverName: string | undefined,
