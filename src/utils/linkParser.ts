@@ -173,40 +173,42 @@ export const parseShadowsocksLink = (link: string): object | null => {
   try {
     if (!link.startsWith('ss://')) return null;
 
-    // Remove ss:// prefix
+    // Split the link into base64 part and server part
     const cleanLink = link.replace('ss://', '');
-    
-    // Decode base64 encoded part
-    let decodedLink: string;
+    const [base64Part, serverPart] = cleanLink.split('@');
+
+    if (!base64Part || !serverPart) {
+      return null;
+    }
+
+    // Decode base64 part
+    let decodedString: string;
     try {
-      decodedLink = atob(cleanLink.split('@')[0]);
-    } catch {
-      // If simple base64 decoding fails, try standard base64 decode
-      decodedLink = atob(cleanLink.split('@')[0]);
+      decodedString = atob(base64Part);
+    } catch (e) {
+      // If decoding fails, the link might be using a different format
+      return null;
     }
 
-    // Split method:password
-    const [method, password] = decodedLink.split(':');
-    
-    // Extract server and port
-    const serverPart = cleanLink.split('@')[1];
-    const [server, port] = serverPart.split(':');
+    // Split method and password
+    const [method, password] = decodedString.split(':');
+    if (!method || !password) {
+      return null;
+    }
 
+    // Parse server part
+    const serverPortParts = serverPart.split('#')[0].split('?')[0].split(':');
+    if (serverPortParts.length !== 2) {
+      return null;
+    }
+
+    const [server, port] = serverPortParts;
+
+    // Extract tag (name)
     const fragmentStart = link.lastIndexOf('#');
-    const tag = fragmentStart !== -1 
-      ? decodeURIComponent(link.slice(fragmentStart + 1)) 
+    const tag = fragmentStart !== -1
+      ? decodeURIComponent(link.slice(fragmentStart + 1))
       : 'shadowsocks-link';
-
-    // Look for optional plugin information
-    let plugin, pluginOpts;
-    if (queryAndFragment) {
-      const params = new URLSearchParams('?' + queryAndFragment);
-      const pluginParam = params.get('plugin');
-      if (pluginParam) {
-        plugin = decodeURIComponent(pluginParam);
-        pluginOpts = params.get('pluginOpts');
-      }
-    }
 
     return {
       type: "shadowsocks",
@@ -214,9 +216,7 @@ export const parseShadowsocksLink = (link: string): object | null => {
       server: server,
       server_port: parseInt(port, 10),
       method: method,
-      password: password,
-      ...(plugin && { plugin }),
-      ...(pluginOpts && { plugin_opts: pluginOpts })
+      password: password
     };
   } catch (error) {
     console.error('Error parsing Shadowsocks link:', error);
