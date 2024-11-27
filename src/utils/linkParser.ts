@@ -79,56 +79,87 @@ export const parseVmessLink = (link: string): object | null => {
   }
 };
 
-export const parseVlessLink = (link: string): object | null => {
+export const parseVlessLink = (link: string) => {
   try {
-    if (!link.startsWith('vless://')) return null;
-    
-    // Create URL object
     const url = new URL(link);
-    
-    // Extract UUID and server details
     const [uuid, encryption] = url.username.split(':');
     const [address, port] = url.hostname.split(':');
-    
-    // Parse query parameters
     const params = Object.fromEntries(url.searchParams);
-    
-    // Extract fragment (optional tag)
     const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
-    
+
+    // Determine if TLS is enabled
+    const isTlsEnabled = params.security === "tls" || params.sni !== undefined;
+
+    // Construct TLS configuration
+    const tlsConfig: any = {
+      enabled: isTlsEnabled
+    };
+
+    // Add server name if TLS is enabled
+    if (isTlsEnabled) {
+      tlsConfig.server_name = params.sni || address;
+      tlsConfig.insecure = false;
+    }
+
+    // Add UTLS configuration
+    if (isTlsEnabled) {
+      tlsConfig.utls = {
+        enabled: true,
+        fingerprint: params.fp || "randomized"
+      };
+    }
+
+    // Add ALPN if specified
+    if (params.alpn) {
+      tlsConfig.alpn = params.alpn.split(',');
+    }
+
+    // Add TLS version constraints
+    tlsConfig.min_version = "1.1";
+    tlsConfig.max_version = "1.3";
+
     return {
       type: "vless",
       tag: tag,
       server: address,
-      server_port: parseInt(port, 10) || 443,
+      server_port: parseInt(port, 10),
       uuid: uuid,
-      encryption: encryption || "none",
-      flow: params.flow || "",
-      tls: {
-        enabled: params.security === "tls",
-        server_name: params.sni || address,
-        insecure: false,
-        alpn: params.alpn ? params.alpn.split(',') : ["h2", "http/1.1"],
-        min_version: "1.2",
-        max_version: "1.3"
-      },
+      flow: "",
+      tls: tlsConfig,
       transport: {
         type: params.type || "tcp",
-        ...(params.path && { path: params.path }),
-        ...(params.host && { headers: { Host: params.host } }),
-        ...(params.type === "grpc" && { 
-          service_name: params.path || "defaultService",
-          idle_timeout: "15s",
-          ping_timeout: "15s",
-          permit_without_stream: false
-        })
-      },
-      ...(params.fp && { fingerprint: params.fp })
+        ...(params.host && { host: [params.host] }),
+        ...(params.path && { path: params.path })
+      }
     };
   } catch (error) {
     console.error('Error parsing Vless link:', error);
     return null;
   }
+};
+
+export const createSingBoxConfig = (link: string) => {
+  const vlessConfig = parseVlessLink(link);
+  
+  return {
+    outbounds: [
+      {
+        type: "selector",
+        tag: "Auto_select",
+        outbounds: [vlessConfig.tag, "auto"],
+        default: vlessConfig.tag
+      },
+      vlessConfig,
+      {
+        type: "urltest",
+        tag: "auto",
+        outbounds: [vlessConfig.tag],
+        url: "https://www.gstatic.com/generate_204",
+        interval: "2m",
+        interrupt_exist_connections: true
+      }
+    ]
+  };
 };
 
 export const parseShadowsocksLink = (link: string): object | null => {
@@ -154,17 +185,20 @@ export const parseShadowsocksLink = (link: string): object | null => {
     const serverPart = cleanLink.split('@')[1];
     const [server, port] = serverPart.split(':');
 
-    const tag = decodeURIComponent(url.hash.replace('#')[1] || 'ss-link');
+    const fragmentStart = link.lastIndexOf('#');
+    const tag = fragmentStart !== -1 
+      ? decodeURIComponent(link.slice(fragmentStart + 1)) 
+      : 'shadowsocks-link';
 
     // Look for optional plugin information
-    const pluginMatch = serverPart.includes('/?plugin=');
     let plugin, pluginOpts;
-    if (pluginMatch) {
-      const [serverPortPart, pluginPart] = serverPart.split('/?plugin=');
-      plugin = decodeURIComponent(pluginPart.split('&')[0]);
-      pluginOpts = pluginPart.includes('&') ? 
-        decodeURIComponent(pluginPart.split('&')[1]) : 
-        undefined;
+    if (queryAndFragment) {
+      const params = new URLSearchParams('?' + queryAndFragment);
+      const pluginParam = params.get('plugin');
+      if (pluginParam) {
+        plugin = decodeURIComponent(pluginParam);
+        pluginOpts = params.get('pluginOpts');
+      }
     }
 
     return {
@@ -247,7 +281,3 @@ const buildTransportConfig = (type: string, path: string | undefined, host: stri
   }
 };
 
-// Example usage
-// const link = 'vmess://...';
-// const config = parseLink(link);
-// console.log(config);
