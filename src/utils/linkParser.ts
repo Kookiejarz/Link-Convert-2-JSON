@@ -82,7 +82,7 @@ export const parseVmessLink = (link: string): object | null => {
 export const parseVlessLink = (link: string) => {
   try {
     const url = new URL(link);
-    const [uuid, address] = url.username.split('@');
+    const [uuid, encryption] = url.username.split('@');
     const [address, port] = url.hostname.split(':');
     const params = Object.fromEntries(url.searchParams);
     const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
