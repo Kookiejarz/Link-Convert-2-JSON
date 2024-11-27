@@ -305,6 +305,22 @@ const createDnsConfig = (): DnsConfig => {
   };
 };
 
+const createInbounds = (): InboundConfig[] => {
+  return [
+    {
+      type: "mixed",
+      tag: "mixed-in",
+      listen: "::",
+      listen_port: 5353,
+      tcp_fast_open: true,
+      udp_fragment: true,
+      sniff: true,
+      sniff_override_destination: true,
+      set_system_proxy: true
+    }
+  ];
+};
+
 // 创建路由配置
 const createRouteConfig = (): RouteConfig => {
   return {
