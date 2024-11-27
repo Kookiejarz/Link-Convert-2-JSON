@@ -746,3 +746,63 @@ const buildTransportConfig = (
       };
   }
 };
+
+// 在所有接口定义和现有函数的后面添加以下代码
+
+// 创建选择器出站配置
+const createSelectorOutbounds = (proxyConfigs: any[]): any[] => {
+  const proxyTags = proxyConfigs.map(config => config.tag);
+  
+  return [
+    {
+      default: proxyTags[0],
+      outbounds: [...proxyTags, "🏎️Auto"],
+      tag: "🌐代理",
+      type: "selector"
+    },
+    {
+      default: "➡️直连",
+      outbounds: ["➡️直连", "🌐代理"],
+      tag: "🇨🇳国内",
+      type: "selector"
+    },
+    {
+      outbounds: proxyTags,
+      interval: "3m",
+      tag: "🏎️Auto",
+      type: "urltest",
+      interrupt_exist_connections: false,
+      url: "https://www.gstatic.com/generate_204",
+      tolerance: 50
+    },
+    {
+      default: "block",
+      outbounds: [...proxyTags, "block"],
+      tag: "🏄🏼‍♀️UDP",
+      type: "selector"
+    }
+  ];
+};
+
+// 添加主函数
+export const handleLinks = (links: string[]): string => {
+  try {
+    // 解析所有链接
+    const proxyConfigs = links
+      .map(link => parseLink(link))
+      .filter(config => config !== null);
+
+    if (proxyConfigs.length === 0) {
+      throw new Error('No valid proxy configurations found');
+    }
+
+    // 创建完整配置
+    const fullConfig = createFullConfig(proxyConfigs);
+
+    // 返回格式化的 JSON 字符串
+    return JSON.stringify(fullConfig, null, 2);
+  } catch (error) {
+    console.error('Error handling links:', error);
+    return '';
+  }
+};
