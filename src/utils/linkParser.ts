@@ -49,29 +49,33 @@ export const parseLink = (link: string): object | null => {
 export const parseVmessLink = (link: string): object | null => {
   try {
     if (!link.startsWith('vmess://')) return null;
+    
     const decoded = atob(link.replace('vmess://', ''));
     const vmessConfig: VmessConfig = JSON.parse(decoded);
+
     const result = {
       type: "vmess",
       tag: vmessConfig.ps || "vmess-link",
       server: vmessConfig.add,
-      server_port: parseInt(vmessConfig.port, 10) || 443,
+      server_port: parseInt(String(vmessConfig.port), 10),
       uuid: vmessConfig.id,
-      alterId: parseInt(vmessConfig.aid, 10),
+      security: vmessConfig.scy || 'auto',
+      alterId: parseInt(vmessConfig.aid || '0', 10),
       network: vmessConfig.net,
-      security: vmessConfig.tls,
-      tls: buildTlsConfig(vmessConfig.tls, vmessConfig.host),
-      transport: buildTransportConfig(vmessConfig.net, vmessConfig.path, vmessConfig.host)
     };
-    // Add 'reality' if it's present in the link
-    if (vmessConfig.type === 'reality') {
-      result['reality'] = {
-        publicKey: vmessConfig.pbkey,
-        shortId: vmessConfig.shortid,
-        fingerprint: vmessConfig.fp || 'chrome',
-        serverName: vmessConfig.sni
-      };
+
+    // Add TLS configuration if present
+    if (vmessConfig.tls) {
+      result['tls'] = buildTlsConfig(vmessConfig.tls, vmessConfig.host);
     }
+
+    // Add transport configuration
+    result['transport'] = buildTransportConfig(
+      vmessConfig.net,
+      vmessConfig.path,
+      vmessConfig.host
+    );
+
     return result;
   } catch (error) {
     console.error('Error parsing Vmess link:', error);
@@ -79,152 +83,152 @@ export const parseVmessLink = (link: string): object | null => {
   }
 };
 
-export const parseVlessLink = (link: string) => {
-  try {
-    if (!link.startsWith('vless://')) {
-      throw new Error('Not a valid VLESS link');
-    }
-
-    const url = new URL(link);
-    const [uuid] = url.username.split(':');
-    const address = url.hostname;
-    const port = parseInt(url.port, 10);
-    const params = Object.fromEntries(url.searchParams);
-    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
-
-    // Determine if TLS is enabled
-    const isTlsEnabled = params.security === "tls" || params.sni !== undefined;
-
-    // Construct TLS configuration
-    const tlsConfig: any = {
-      enabled: isTlsEnabled
-    };
-
-    // Add server name if TLS is enabled
-    if (isTlsEnabled) {
-      tlsConfig.server_name = params.sni || address;
-      tlsConfig.insecure = false;
-    }
-
-    // Add UTLS configuration
-    if (isTlsEnabled) {
-      tlsConfig.utls = {
-        enabled: true,
-        fingerprint: params.fp || "randomized"
-      };
-    }
-
-    // Add ALPN if specified
-    if (params.alpn) {
-      tlsConfig.alpn = params.alpn.split(',');
-    }
-
-    // Add TLS version constraints
-    tlsConfig.min_version = "1.1";
-    tlsConfig.max_version = "1.3";
-
-    const config = {
-      type: "vless",
-      tag: tag,
-      server: address,
-      server_port: port,
-      uuid: uuid,
-      flow: "",
-      tls: tlsConfig,
-      transport: {
-        type: params.type || "tcp",
-        ...(params.host && { host: [params.host] }),
-        ...(params.path && { path: params.path })
-      }
-    };
-
-    return config;
-  } catch (error) {
-    console.error('Error parsing Vless link:', error);
-    return null;
-  }
-};
-
-export const createSingBoxConfig = (link: string) => {
-  const vlessConfig = parseVlessLink(link);
-  
-  return {
-    outbounds: [
-      {
-        type: "selector",
-        tag: "Auto_select",
-        outbounds: [vlessConfig.tag, "auto"],
-        default: vlessConfig.tag
-      },
-      vlessConfig,
-      {
-        type: "urltest",
-        tag: "auto",
-        outbounds: [vlessConfig.tag],
-        url: "https://www.gstatic.com/generate_204",
-        interval: "2m",
-        interrupt_exist_connections: true
-      }
-    ]
-  };
-};
-
 export const parseShadowsocksLink = (link: string): object | null => {
   try {
     if (!link.startsWith('ss://')) return null;
 
-    // Split the link into base64 part and server part
-    const cleanLink = link.replace('ss://', '');
-    const [base64Part, serverPart] = cleanLink.split('@');
+    const url = new URL(link);
+    const [base64Part, serverPart] = url.username.split('@');
+    
+    if (!base64Part) return null;
 
-    if (!base64Part || !serverPart) {
-      return null;
-    }
-
-    // Decode base64 part
     let decodedString: string;
     try {
       decodedString = atob(base64Part);
     } catch (e) {
-      // If decoding fails, the link might be using a different format
       return null;
     }
 
-    // Split method and password
     const [method, password] = decodedString.split(':');
-    if (!method || !password) {
-      return null;
-    }
+    if (!method || !password) return null;
 
-    // Parse server part
-    const serverPortParts = serverPart.split('#')[0].split('?')[0].split(':');
-    if (serverPortParts.length !== 2) {
-      return null;
-    }
+    const server = url.hostname;
+    const port = parseInt(url.port, 10);
+    const tag = decodeURIComponent(url.hash.replace('#', '') || 'shadowsocks-link');
+    
+    // Parse query parameters
+    const params = Object.fromEntries(url.searchParams);
 
-    const [server, port] = serverPortParts;
-
-    // Extract tag (name)
-    const fragmentStart = link.lastIndexOf('#');
-    const tag = fragmentStart !== -1
-      ? decodeURIComponent(link.slice(fragmentStart + 1))
-      : 'shadowsocks-link';
-
-    return {
+    const result: any = {
       type: "shadowsocks",
       tag: tag,
       server: server,
-      server_port: parseInt(port, 10),
+      server_port: port,
       method: method,
       password: password
     };
+
+    // Add plugin configuration if present
+    if (params.plugin) {
+      const [pluginName, ...pluginOpts] = params.plugin.split(';');
+      result.plugin = pluginName;
+      
+      // Handle specific plugins
+      switch (pluginName) {
+        case 'v2ray-plugin':
+        case 'xray-plugin':
+          // Parse plugin options
+          const pluginParams = new URLSearchParams(pluginOpts.join(';'));
+          
+          // Add TLS configuration if the plugin uses TLS
+          if (pluginParams.get('tls') === 'true') {
+            result.tls = buildTlsConfig('tls', pluginParams.get('host'));
+          }
+
+          // Add transport configuration
+          result.transport = buildTransportConfig(
+            pluginParams.get('mode') || 'ws',
+            pluginParams.get('path'),
+            pluginParams.get('host')
+          );
+          break;
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error('Error parsing Shadowsocks link:', error);
     return null;
   }
 };
 
-const buildTlsConfig = (security: string | undefined, serverName: string | undefined): object => {
+// Modify parseVlessLink to use the common builders
+export const parseVlessLink = (link: string) => {
+  try {
+    if (!link.startsWith('vless://')) return null;
+
+    const url = new URL(link);
+    const [uuid] = url.username.split(':');
+    const params = Object.fromEntries(url.searchParams);
+    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
+
+    return {
+      type: "vless",
+      tag: tag,
+      server: url.hostname,
+      server_port: parseInt(url.port, 10),
+      uuid: uuid,
+      flow: params.flow || "",
+      tls: buildTlsConfig(params.security, params.sni || url.hostname),
+      transport: buildTransportConfig(
+        params.type || "tcp",
+        params.path,
+        params.host
+      )
+    };
+  } catch (error) {
+    console.error('Error parsing Vless link:', error);
+    return null;
+  }
+};
+
+interface TlsConfig {
+  enabled: boolean;
+  server_name: string;
+  insecure: boolean;
+  alpn: string[];
+  min_version: string;
+  max_version: string;
+  cipher_suites: string[];
+  utls?: {
+    enabled: boolean;
+    fingerprint: string;
+  };
+}
+
+interface TransportConfig {
+  type: string;
+  path?: string;
+  headers?: {
+    Host: string;
+  };
+  service_name?: string;
+  idle_timeout?: string;
+  ping_timeout?: string;
+  permit_without_stream?: boolean;
+}
+
+const randomUTlsFingerprint = (): string => {
+  const fingerprints = [
+    "chrome",
+    "firefox",
+    "safari",
+    "ios",
+    "android",
+    "edge",
+    "360",
+    "qq",
+    "random",
+    "randomized"
+  ];
+  return fingerprints[Math.floor(Math.random() * fingerprints.length)];
+};
+
+const buildTlsConfig = (
+  security: string | undefined, 
+  serverName: string | undefined,
+  fingerprint?: string
+): TlsConfig => {
   return {
     enabled: security === "tls",
     server_name: serverName || "",
@@ -238,7 +242,7 @@ const buildTlsConfig = (security: string | undefined, serverName: string | undef
       "TLS_AES_256_GCM_SHA384",
       "TLS_CHACHA20_POLY1305_SHA256",
       
-      // TLS 1.2 Cipher Suites for broader compatibility
+      // TLS 1.2 Cipher Suites
       "ECDHE-ECDSA-AES128-GCM-SHA256",
       "ECDHE-RSA-AES128-GCM-SHA256",
       "ECDHE-ECDSA-AES256-GCM-SHA384",
@@ -246,20 +250,26 @@ const buildTlsConfig = (security: string | undefined, serverName: string | undef
       "ECDHE-ECDSA-CHACHA20-POLY1305",
       "ECDHE-RSA-CHACHA20-POLY1305",
       
-      // Additional suites for enhanced security
+      // Additional suites
       "ECDHE-ECDSA-AES128-SHA256",
       "ECDHE-RSA-AES128-SHA256"
     ],
     utls: {
       enabled: true,
-      fingerprint: randomUTlsFingerprint()
+      fingerprint: fingerprint || randomUTlsFingerprint()
     }
   };
 };
 
-const buildTransportConfig = (type: string, path: string | undefined, host: string | undefined): object => {
-  switch (type) {
+const buildTransportConfig = (
+  type: string, 
+  path?: string, 
+  host?: string,
+  serviceName?: string
+): TransportConfig => {
+  switch (type.toLowerCase()) {
     case "ws":
+    case "websocket":
       return {
         type: "ws",
         path: path || "/",
@@ -267,7 +277,9 @@ const buildTransportConfig = (type: string, path: string | undefined, host: stri
           Host: host || ""
         }
       };
+
     case "http":
+    case "h2":
       return {
         type: "http",
         path: path || "/",
@@ -275,16 +287,24 @@ const buildTransportConfig = (type: string, path: string | undefined, host: stri
           Host: host || ""
         }
       };
+
     case "grpc":
       return {
         type: "grpc",
-        service_name: path || "defaultService",
+        service_name: serviceName || path || "defaultService",
         idle_timeout: "15s",
         ping_timeout: "15s",
         permit_without_stream: false
       };
+
+    case "tcp":
+      return {
+        type: "tcp"
+      };
+
     default:
-      return {};
+      return {
+        type: type || "tcp"
+      };
   }
 };
-
