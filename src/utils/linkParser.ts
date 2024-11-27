@@ -230,7 +230,7 @@ export const parseVlessLink = (link: string) => {
 const buildTlsConfig = (
   security: string | undefined, 
   serverName: string | undefined,
-  fingerprint?: string
+  fp?: string
 ): TlsConfig => {
   return {
     enabled: security === "tls",
@@ -259,7 +259,7 @@ const buildTlsConfig = (
     ],
     utls: {
       enabled: true,
-      fingerprint: fingerprint
+      fingerprint: fp
     }
   };
 };
