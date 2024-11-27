@@ -82,21 +82,47 @@ export const parseVmessLink = (link: string): object | null => {
 export const parseVlessLink = (link: string): object | null => {
   try {
     if (!link.startsWith('vless://')) return null;
+    
+    // Create URL object
     const url = new URL(link);
-    const [id, encryption] = url.pathname.split('@')[0].split(':');
+    
+    // Extract UUID and server details
+    const [uuid, encryption] = url.username.split(':');
     const [address, port] = url.hostname.split(':');
+    
+    // Parse query parameters
     const params = Object.fromEntries(url.searchParams);
+    
+    // Extract fragment (optional tag)
+    const tag = decodeURIComponent(url.hash.replace('#', '') || 'vless-link');
     
     return {
       type: "vless",
-      tag: params.ps || "vless-link",
+      tag: tag,
       server: address,
-      server_port: parseInt(port, 10),
-      uuid: id,
+      server_port: parseInt(port, 10) || "443",
+      uuid: uuid,
       encryption: encryption || "none",
       flow: params.flow || "",
-      tls: buildTlsConfig(params.security, params.sni),
-      transport: buildTransportConfig(params.type, params.path, params.host),
+      tls: {
+        enabled: params.security === "tls",
+        server_name: params.sni || address,
+        insecure: false,
+        alpn: params.alpn ? params.alpn.split(',') : ["h2", "http/1.1"],
+        min_version: "1.2",
+        max_version: "1.3"
+      },
+      transport: {
+        type: params.type || "tcp",
+        ...(params.path && { path: params.path }),
+        ...(params.host && { headers: { Host: params.host } }),
+        ...(params.type === "grpc" && { 
+          service_name: params.path || "defaultService",
+          idle_timeout: "15s",
+          ping_timeout: "15s",
+          permit_without_stream: false
+        })
+      },
       ...(params.fp && { fingerprint: params.fp })
     };
   } catch (error) {
