@@ -154,7 +154,7 @@ export const parseShadowsocksLink = (link: string): object | null => {
     const serverPart = cleanLink.split('@')[1];
     const [server, port] = serverPart.split(':');
 
-    const tag = decodeURIComponent(url.hash.replace('#', '') || 'ss-link');
+    const tag = decodeURIComponent(url.hash.replace('#')[1] || 'ss-link');
 
     // Look for optional plugin information
     const pluginMatch = serverPart.includes('/?plugin=');
