@@ -1,859 +1,614 @@
-interface VmessConfig {
-  v: string;
-  ps: string;
-  add: string;
-  port: string;
-  id: string;
-  aid: string;
-  net: string;
-  type: string;
-  host?: string;  // Make optional
-  path?: string;  // Make optional
-  tls?: string;   // Make optional
-  scy?: string;   // Add security parameter
+export type ParsedLink = VmessOutbound | VlessOutbound | ShadowsocksOutbound;
+
+interface OutboundBase {
+  tag: string;
+  protocol: 'vmess' | 'vless' | 'shadowsocks';
+  streamSettings?: StreamSettings;
 }
 
-interface VlessConfig {
+export interface VmessOutbound extends OutboundBase {
+  protocol: 'vmess';
+  settings: {
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        alterId: number;
+        security: string;
+        encryption?: string;
+        level?: number;
+        email?: string;
+      }>;
+    }>;
+  };
+}
+
+export interface VlessOutbound extends OutboundBase {
+  protocol: 'vless';
+  settings: {
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        encryption: string;
+        flow?: string;
+        level?: number;
+        email?: string;
+        security?: string;
+      }>;
+    }>;
+  };
+}
+
+export interface ShadowsocksOutbound extends OutboundBase {
+  protocol: 'shadowsocks';
+  settings: {
+    servers: Array<{
+      address: string;
+      port: number;
+      method: string;
+      password: string;
+      plugin?: string;
+      pluginOptions?: Record<string, string>;
+    }>;
+  };
+}
+
+export interface StreamSettings {
+  network?: string;
+  security?: 'tls' | 'reality';
+  tlsSettings?: {
+    serverName?: string;
+    fingerprint?: string;
+    alpn?: string[];
+    allowInsecure?: boolean;
+    ech?: string;
+    enableEchPq?: boolean;
+  };
+  realitySettings?: {
+    serverName?: string;
+    fingerprint?: string;
+    publicKey?: string;
+    shortId?: string;
+    spiderX?: string;
+    show?: boolean;
+    dest?: string;
+    mport?: string;
+    mldsa65Verify?: string;
+  };
+  wsSettings?: {
+    path?: string;
+    headers?: Record<string, string>;
+  };
+  grpcSettings?: {
+    serviceName?: string;
+    mode?: string;
+  };
+  packetEncoding?: string;
+}
+
+interface VmessConfig {
+  v?: string;
+  ps?: string;
+  add: string;
+  port: string | number;
   id: string;
-  address: string;
-  port: string;
-  encryption?: string;
-  flow?: string;
-  security?: string;
+  aid?: string | number;
+  net?: string;
+  type?: string;
+  host?: string;
+  path?: string;
+  tls?: string;
   sni?: string;
   fp?: string;
-  type?: string;
-  path?: string;
-  host?: string;
-}
-
-interface ShadowsocksConfig {
-  server: string;
-  server_port: number;
-  method: string;
-  password: string;
-  plugin?: string;
-  plugin_opts?: string;
-}
-
-interface TlsConfig {
-  enabled: boolean;
-  server_name: string;
-  insecure: boolean;
-  alpn: string[];
-  min_version: string;
-  max_version: string;
-  cipher_suites: string[];
-  utls?: {
-    enabled: boolean;
-    fingerprint: string;
-  };
-}
-
-interface TransportConfig {
-  type: string;
-  path?: string;
-  headers?: {
-    Host: string;
-  };
-  service_name?: string;
-  idle_timeout?: string;
-  ping_timeout?: string;
-  permit_without_stream?: boolean;
-}
-
-interface SingBoxConfig {
-  log: LogConfig;
-  dns: DnsConfig;
-  route: RouteConfig;
-  inbounds: InboundConfig[];
-  outbounds: OutboundConfig[];
-  experimental: ExperimentalConfig;
-}
-
-// 基础配置接口
-interface LogConfig {
-  level: string;
-  disabled: boolean;
-  timestamp: boolean;
-}
-
-interface DnsConfig {
-  servers: DnsServer[];
-  rules: DnsRule[];
-  disable_cache: boolean;
-  disable_expire: boolean;
-  final: string;
-  strategy: string;
-}
-
-interface RouteConfig {
-  final: string;
-  auto_detect_interface: boolean;
-  rule_set: RuleSet[];
-  rules: RouteRule[];
-}
-
-interface DnsServer {
-  address: string;
-  detour?: string;
-  tag?: string;
-  strategy?: string;
-}
-
-interface DnsRule {
-  type?: string;
-  mode?: string;
-  rules?: any[];
-  server?: string;
-  rule_set?: string[];
-  domain_suffix?: string[];
-  outbound?: string[];
-  clash_mode?: string;
-}
-
-interface RuleSet {
-  format: string;
-  tag: string;
-  type: string;
-  url: string;
-  download_detour: string;
-}
-
-interface RouteRule {
-  protocol?: string;
-  outbound?: string;
-  type?: string;
-  mode?: string;
-  rules?: any[];
-  domain?: string[];
-  domain_suffix?: string[];
-  domain_keyword?: string[];
-  ip_is_private?: boolean;
-  network?: string[];
-  rule_set?: string[];
-  clash_mode?: string;
-}
-
-interface InboundConfig {
-  type: string;
-  tag: string;
-  listen?: string;
-  listen_port?: number;
-  tcp_fast_open?: boolean;
-  udp_fragment?: boolean;
-  sniff?: boolean;
-  sniff_override_destination?: boolean;
-  set_system_proxy?: boolean;
-  strict_route?: boolean;
-  stack?: string;
-  domain_strategy?: string;
-  udp_timeout?: number;
-  interface_name?: string;
-  mtu?: number;
-  auto_route?: boolean;
-  sniff_timeout?: string;
-  address?: string[];
-}
-
-interface OutboundConfig {
-  tag: string;
-  type: string;
-  server?: string;
-  server_port?: number;
-  uuid?: string;
+  scy?: string;
+  alpn?: string | string[];
   security?: string;
-  alter_id?: number;
-  flow?: string;
-  method?: string;
-  password?: string;
-  plugin?: string;
-  plugin_opts?: any;
-  tls?: TlsConfig;
-  transport?: TransportConfig;
-  outbounds?: string[];
-  default?: string;
-  interval?: string;
-  interrupt_exist_connections?: boolean;
-  url?: string;
-  tolerance?: number;
+  level?: number;
+  email?: string;
+  allowInsecure?: string | boolean;
 }
 
-const createRuleSets = (): RuleSet[] => {
-  return [
-    {
-      format: "binary",
-      tag: "geoip-cn",
-      type: "remote",
-      url: "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-      download_detour: "🌐代理"
-    },
-    {
-      format: "binary",
-      tag: "geosite-cn",
-      type: "remote",
-      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-      download_detour: "🌐代理"
-    },
-    {
-      format: "binary",
-      tag: "geosite-private",
-      type: "remote",
-      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-private.srs",
-      download_detour: "🌐代理"
-    },
-    {
-      format: "binary",
-      tag: "geosite-category-ads-all",
-      type: "remote",
-      url: "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-      download_detour: "🌐代理"
-    }
-  ];
-};
-
-const createRouteRules = (): RouteRule[] => {
-  return [
-    {
-      protocol: "dns",
-      outbound: "dns-out"
-    },
-    {
-      type: "logical",
-      mode: "or",
-      rules: [
-        { ip_is_private: true },
-        { domain_keyword: ["baidu","bilibili"] },
-        { domain_suffix: ["qq.com"] },
-        { rule_set: ["geosite-private"] },
-        { clash_mode: "Direct" }
-      ],
-      outbound: "➡️直连"
-    },
-    {
-      type: "logical",
-      mode: "or",
-      rules: [
-        { domain: ["google.com", "youtube.com"] },
-        { rule_set: ["geosite-tiktok","geosite-openai"] },
-        { clash_mode: "Global" }
-      ],
-      outbound: "🌐代理"
-    },
-    {
-      domain_suffix: [".cn"],
-      rule_set: ["geoip-cn", "geosite-cn"],
-      outbound: "🇨🇳国内"
-    },
-    {
-      network: ["udp"],
-      outbound: "🏄🏼‍♀️UDP"
-    },
-    {
-      outbound: "block",
-      rule_set: ["geosite-category-ads-all"]
-    }
-  ];
-};
-
-// 添加在其他函数定义后面
-const createInbounds = (): InboundConfig[] => {
-  return [
-    {
-      type: "mixed",
-      tag: "mixed-in",
-      listen: "::",
-      listen_port: 5353,
-      tcp_fast_open: true,
-      udp_fragment: true,
-      sniff: true,
-      sniff_override_destination: true,
-      set_system_proxy: true
-    },
-    {
-      strict_route: true,
-      stack: "system",
-      domain_strategy: "",
-      sniff: true,
-      udp_timeout: 300,
-      interface_name: "utun",
-      type: "tun",
-      mtu: 1420,
-      auto_route: true,
-      sniff_timeout: "300ms",
-      address: ["172.19.0.1/30"],
-      sniff_override_destination: true,
-      tag: "tun-in"
-    }
-  ];
-};
-
-// 添加在其他接口定义区域
-interface ExperimentalConfig {
-  cache_file: {
-    path: string;
-    cache_id: string;
-    store_fakeip: boolean;
-    enabled: boolean;
-  };
-  clash_api: {
-    external_controller: string;
-    external_ui_download_url: string;
-    secret: string;
-    default_mode: string;
-    external_ui_download_detour: string;
-    external_ui: string;
-  };
-}
-
-// 创建 DNS 配置
-const createDnsConfig = (): DnsConfig => {
-  return {
-    servers: [
-      {
-        address: "https://223.5.5.5/dns-query",
-        detour: "➡️直连",
-        tag: "alidns",
-        strategy: "prefer_ipv4"
-      },
-      {
-        address: "https://1.1.1.1/dns-query",
-        detour: "🌐代理",
-        tag: "cloudflare",
-        strategy: "prefer_ipv4"
-      },
-      {
-        address: "rcode://success",
-        tag: "block"
-      }
-    ],
-    rules: [
-      {
-        type: "logical",
-        mode: "or",
-        rules: [
-          { outbound: ["any"] },
-          { clash_mode: "Direct" },
-          { rule_set: ["geosite-cn", "geosite-private"] },
-          { domain_suffix: [".cn"] }
-        ],
-        server: "alidns"
-      },
-      {
-        server: "cloudflare",
-        clash_mode: "Global"
-      },
-      {
-        server: "block",
-        rule_set: ["geosite-category-ads-all"]
-      }
-    ],
-    disable_cache: false,
-    disable_expire: false,
-    final: "cloudflare",
-    strategy: "prefer_ipv4"
-  };
-};
-
-
-// 创建路由配置
-const createRouteConfig = (): RouteConfig => {
-  return {
-    final: "🌐代理",
-    auto_detect_interface: true,
-    rule_set: createRuleSets(),
-    rules: createRouteRules()
-  };
-};
-
-const createProxyOutbound = (proxyConfig: any): any => {
-  // 基础配置
-  const baseConfig = {
-    tag: proxyConfig.tag,
-    type: proxyConfig.type,
-    server: proxyConfig.server,
-    server_port: proxyConfig.server_port
-  };
-
-  // 根据协议类型添加特定配置
-  switch (proxyConfig.type) {
-    case 'vmess':
-      return {
-        ...baseConfig,
-        uuid: proxyConfig.uuid,
-        security: proxyConfig.security,
-        alter_id: proxyConfig.alterId,
-        ...(proxyConfig.tls && {
-          tls: {
-            enabled: proxyConfig.tls.enabled,
-            server_name: proxyConfig.tls.server_name,
-            insecure: proxyConfig.tls.insecure,
-            alpn: proxyConfig.tls.alpn,
-            ...(proxyConfig.tls.utls && {
-              utls: {
-                enabled: proxyConfig.tls.utls.enabled,
-                fingerprint: proxyConfig.tls.utls.fingerprint
-              }
-            })
-          }
-        }),
-        ...(proxyConfig.transport && {
-          transport: {
-            type: proxyConfig.transport.type,
-            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
-            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
-            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
-          }
-        })
-      };
-
-    case 'vless':
-      return {
-        ...baseConfig,
-        uuid: proxyConfig.uuid,
-        flow: proxyConfig.flow || '',
-        ...(proxyConfig.tls && {
-          tls: {
-            enabled: proxyConfig.tls.enabled,
-            server_name: proxyConfig.tls.server_name,
-            insecure: proxyConfig.tls.insecure,
-            alpn: proxyConfig.tls.alpn,
-            ...(proxyConfig.tls.utls && {
-              utls: {
-                enabled: proxyConfig.tls.utls.enabled,
-                fingerprint: proxyConfig.tls.utls.fingerprint
-              }
-            })
-          }
-        }),
-        ...(proxyConfig.transport && {
-          transport: {
-            type: proxyConfig.transport.type,
-            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
-            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
-            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
-          }
-        })
-      };
-
-    case 'shadowsocks':
-      return {
-        ...baseConfig,
-        method: proxyConfig.method,
-        password: proxyConfig.password,
-        ...(proxyConfig.plugin && { plugin: proxyConfig.plugin }),
-        ...(proxyConfig.plugin_opts && { plugin_opts: proxyConfig.plugin_opts }),
-        ...(proxyConfig.tls && {
-          tls: {
-            enabled: proxyConfig.tls.enabled,
-            server_name: proxyConfig.tls.server_name,
-            insecure: proxyConfig.tls.insecure,
-            alpn: proxyConfig.tls.alpn,
-            ...(proxyConfig.tls.utls && {
-              utls: {
-                enabled: proxyConfig.tls.utls.enabled,
-                fingerprint: proxyConfig.tls.utls.fingerprint
-              }
-            })
-          }
-        }),
-        ...(proxyConfig.transport && {
-          transport: {
-            type: proxyConfig.transport.type,
-            ...(proxyConfig.transport.path && { path: proxyConfig.transport.path }),
-            ...(proxyConfig.transport.headers && { headers: proxyConfig.transport.headers }),
-            ...(proxyConfig.transport.service_name && { service_name: proxyConfig.transport.service_name })
-          }
-        })
-      };
-
-    default:
-      return baseConfig;
+const parseBooleanParam = (value?: string | boolean | null): boolean | undefined => {
+  if (value === null || value === undefined) {
+    return undefined;
   }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
 };
 
-// 在 createOutbounds 函数中使用
-const createOutbounds = (proxyConfigs: any[]): OutboundConfig[] => {
-  const baseOutbounds = [
-    {
-      tag: "➡️直连",
-      type: "direct"
-    },
-    {
-      tag: "block",
-      type: "block"
-    },
-    {
-      tag: "dns-out",
-      type: "dns"
+const normalizeAlpn = (value?: string | string[] | null): string[] | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const filtered = value.map((entry) => entry.trim()).filter(Boolean);
+    return filtered.length > 0 ? filtered : undefined;
+  }
+
+  const segments = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return segments.length > 0 ? segments : undefined;
+};
+
+const createStreamSettings = (options: {
+  network?: string | null;
+  security?: string | null;
+  serverName?: string | null;
+  fingerprint?: string | null;
+  alpn?: string[] | undefined;
+  echConfig?: string | null;
+  echPqEnabled?: boolean | undefined;
+  reality?: {
+    publicKey?: string | null;
+    shortId?: string | null;
+    spiderX?: string | null;
+    show?: boolean | undefined;
+    dest?: string | null;
+    mport?: string | null;
+    mldsa65Verify?: string | null;
+  };
+  host?: string | null;
+  path?: string | null;
+  serviceName?: string | null;
+  grpcMode?: string | null;
+  packetEncoding?: string | null;
+  allowInsecure?: boolean | undefined;
+}): StreamSettings | undefined => {
+  const streamSettings: StreamSettings = {};
+
+  const networkValue = options.network?.toLowerCase();
+  const network = networkValue === 'websocket' ? 'ws' : networkValue;
+  if (network) {
+    streamSettings.network = network;
+  }
+
+  if (options.packetEncoding) {
+    streamSettings.packetEncoding = options.packetEncoding;
+  }
+
+  if (network === 'ws') {
+    const wsSettings: StreamSettings['wsSettings'] = {};
+
+    if (options.path) {
+      wsSettings.path = options.path;
     }
-  ];
-    // 转换代理节点配置
-    const proxyOutbounds = proxyConfigs.map(config => createProxyOutbound(config));
 
-    // 添加选择器和自动测试
-    const selectorOutbounds = createSelectorOutbounds(proxyConfigs);
-  
-    return [...baseOutbounds, ...proxyOutbounds, ...selectorOutbounds];
-};
+    if (options.host) {
+      wsSettings.headers = { Host: options.host };
+    }
 
-export const createFullConfig = (proxyConfigs: any[]): SingBoxConfig => {
-  return {
-    log: {
-      level: "info",
-      disabled: false,
-      timestamp: true
-    },
-    dns: createDnsConfig(),
-    route: createRouteConfig(),
-    inbounds: createInbounds(),
-    outbounds: createOutbounds(proxyConfigs),
-    experimental: {
-      cache_file: {
-        path: "cache.db",
-        cache_id: "cache_id",
-        store_fakeip: true,
-        enabled: true
-      },
-      clash_api: {
-        external_controller: "localhost:9090",
-        external_ui_download_url: "",
-        secret: "",
-        default_mode: "",
-        external_ui_download_detour: "",
-        external_ui: "ui"
+    if (Object.keys(wsSettings).length > 0) {
+      streamSettings.wsSettings = wsSettings;
+    }
+  }
+
+  if (network === 'grpc') {
+    const grpcSettings: StreamSettings['grpcSettings'] = {};
+
+    if (options.serviceName) {
+      grpcSettings.serviceName = options.serviceName;
+    }
+
+    if (options.grpcMode) {
+      grpcSettings.mode = options.grpcMode;
+    }
+
+    if (Object.keys(grpcSettings).length > 0) {
+      streamSettings.grpcSettings = grpcSettings;
+    }
+  }
+
+  const security = options.security?.toLowerCase();
+  if (security === 'tls' || security === 'reality') {
+    streamSettings.security = security;
+  }
+
+  if (security === 'tls') {
+    const tlsSettings: NonNullable<StreamSettings['tlsSettings']> = {};
+
+    if (options.serverName) {
+      tlsSettings.serverName = options.serverName;
+    }
+
+    if (options.fingerprint) {
+      tlsSettings.fingerprint = options.fingerprint;
+    }
+
+    if (options.alpn && options.alpn.length > 0) {
+      tlsSettings.alpn = options.alpn;
+    }
+
+    if (options.allowInsecure !== undefined) {
+      tlsSettings.allowInsecure = options.allowInsecure;
+    }
+
+    if (options.echConfig) {
+      tlsSettings.ech = options.echConfig;
+
+      if (options.echPqEnabled !== undefined) {
+        tlsSettings.enableEchPq = options.echPqEnabled;
       }
     }
-  };
+
+    if (Object.keys(tlsSettings).length > 0) {
+      streamSettings.tlsSettings = tlsSettings;
+    }
+  }
+
+  if (security === 'reality') {
+    const realitySettings: NonNullable<StreamSettings['realitySettings']> = {};
+
+    if (options.serverName) {
+      realitySettings.serverName = options.serverName;
+    }
+
+    if (options.fingerprint) {
+      realitySettings.fingerprint = options.fingerprint;
+    }
+
+    if (options.reality?.publicKey) {
+      realitySettings.publicKey = options.reality.publicKey;
+    }
+
+    if (options.reality?.shortId) {
+      realitySettings.shortId = options.reality.shortId;
+    }
+
+    if (options.reality?.spiderX) {
+      realitySettings.spiderX = options.reality.spiderX;
+    }
+
+    if (options.reality?.show !== undefined) {
+      realitySettings.show = options.reality.show;
+    }
+
+    if (options.reality?.dest) {
+      realitySettings.dest = options.reality.dest;
+    }
+
+    if (options.reality?.mport) {
+      realitySettings.mport = options.reality.mport;
+    }
+
+    if (options.reality?.mldsa65Verify) {
+      realitySettings.mldsa65Verify = options.reality.mldsa65Verify;
+    }
+
+    if (Object.keys(realitySettings).length > 0) {
+      streamSettings.realitySettings = realitySettings;
+    }
+  }
+
+  if (Object.keys(streamSettings).length === 0) {
+    return undefined;
+  }
+
+  return streamSettings;
 };
 
-const randomUTlsFingerprint = (): string => {
-  const fingerprints = [
-    "chrome",
-    "firefox",
-    "safari",
-    "ios",
-    "android",
-    "edge",
-    "360",
-    "qq",
-    "random",
-    "randomized"
-  ];
-  return fingerprints[Math.floor(Math.random() * fingerprints.length)];
-};
-
-export const parseLink = (link: string): object | null => {
+export const parseLink = (link: string): ParsedLink | null => {
   if (link.startsWith('vmess://')) {
     return parseVmessLink(link);
-  } else if (link.startsWith('vless://')) {
+  }
+
+  if (link.startsWith('vless://')) {
     return parseVlessLink(link);
-  } else if (link.startsWith('ss://')) {
+  }
+
+  if (link.startsWith('ss://')) {
     return parseShadowsocksLink(link);
   }
+
   return null;
 };
 
-export const parseVmessLink = (link: string): object | null => {
+export const parseVmessLink = (link: string): VmessOutbound | null => {
   try {
     if (!link.startsWith('vmess://')) return null;
-    
-    const decoded = atob(link.replace('vmess://', ''));
+
+    const encoded = link.replace('vmess://', '');
+    const decoded = atob(encoded);
     const vmessConfig: VmessConfig = JSON.parse(decoded);
 
-    // Keep original fingerprint value
-    const fingerprint = vmessConfig.type || 'chrome';
+    const port = parseInt(String(vmessConfig.port ?? ''), 10);
+    if (!vmessConfig.add || Number.isNaN(port) || !vmessConfig.id) {
+      return null;
+    }
 
-    const result = {
-      type: "vmess",
-      tag: vmessConfig.ps || "vmess-link",
-      server: vmessConfig.add,
-      server_port: parseInt(String(vmessConfig.port), 10),
-      uuid: vmessConfig.id,
-      security: vmessConfig.security || 'auto',
-      alterId: parseInt(vmessConfig.aid || '0', 10),
-      network: vmessConfig.net,
-      tls: buildTlsConfig(vmessConfig.tls, vmessConfig.host, fingerprint),
-      transport: buildTransportConfig(
-        vmessConfig.net,
-        vmessConfig.path,
-        vmessConfig.host
-      )
+    const security = (vmessConfig.security ?? 'auto').toLowerCase();
+    const fingerprint = vmessConfig.fp || vmessConfig.type || undefined;
+    const alpn = normalizeAlpn(vmessConfig.alpn ?? null);
+    const allowInsecure = parseBooleanParam(vmessConfig.allowInsecure ?? null);
+
+    const streamSettings = createStreamSettings({
+      network: vmessConfig.net || 'tcp',
+      security: vmessConfig.tls || undefined,
+      serverName: vmessConfig.sni || vmessConfig.host || vmessConfig.add,
+      fingerprint,
+      alpn,
+      allowInsecure,
+      host: vmessConfig.host || null,
+      path: vmessConfig.path || null,
+    });
+
+    const user = {
+      id: vmessConfig.id,
+      alterId: parseInt(String(vmessConfig.aid ?? '0'), 10),
+      security,
+      encryption: vmessConfig.scy || undefined,
+      level: vmessConfig.level,
+      email: vmessConfig.email,
     };
 
-    return result;
+    const outbound: VmessOutbound = {
+      tag: vmessConfig.ps || 'vmess-link',
+      protocol: 'vmess',
+      settings: {
+        vnext: [
+          {
+            address: vmessConfig.add,
+            port,
+            users: [user],
+          },
+        ],
+      },
+    };
+
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
+    }
+
+    return outbound;
   } catch (error) {
     console.error('Error parsing Vmess link:', error);
     return null;
   }
 };
 
-export const parseVlessLink = (link: string): object | null => {
+export const parseVlessLink = (link: string): VlessOutbound | null => {
   try {
     if (!link.startsWith('vless://')) return null;
-    
+
     const url = new URL(link);
-    const [uuid] = url.username.split(':');
-    const params = Object.fromEntries(url.searchParams);
-    
+    const uuid = url.username;
+    if (!uuid) {
+      return null;
+    }
+
+    const params = new URLSearchParams(url.search);
+    const port = url.port ? parseInt(url.port, 10) : 443;
+
     let tag = 'vless-link';
     if (url.hash) {
       tag = decodeURIComponent(url.hash.substring(1));
     }
 
-    // Keep original fingerprint value
-    const fingerprint = params.fp || 'chrome';
+    const security = params.get('security')?.toLowerCase();
+    const fingerprint = params.get('fp') || undefined;
+    const alpn = normalizeAlpn(params.get('alpn'));
+    const echConfig = params.get('ech') || undefined;
+    const echPqEnabled = parseBooleanParam(
+      params.get('echpq') || params.get('ech-pq') || params.get('ech_pq'),
+    );
+    const allowInsecure = parseBooleanParam(
+      params.get('allowInsecure') || params.get('allow_insecure') || params.get('insecure'),
+    );
 
-    return {
-      type: "vless",
-      tag: tag,
-      server: url.hostname,
-      server_port: parseInt(url.port, 10),
-      uuid: uuid,
-      flow: params.flow || "",
-      tls: buildTlsConfig(params.security, params.sni || url.hostname, fingerprint),
-      transport: buildTransportConfig(
-        params.type || "tcp",
-        params.path,
-        params.host
-      )
+    const realityOptions = security === 'reality'
+      ? {
+          publicKey: params.get('pbk'),
+          shortId: params.get('sid'),
+          spiderX: params.get('spx'),
+          show: parseBooleanParam(params.get('show')),
+          dest: params.get('dest'),
+          mport: params.get('mport'),
+          mldsa65Verify: params.get('mldsa65Verify'),
+        }
+      : undefined;
+
+    const packetEncoding = params.get('packetEncoding') || params.get('packet_encoding') || null;
+
+    const streamSettings = createStreamSettings({
+      network: params.get('type') || params.get('transport') || 'tcp',
+      security,
+      serverName: params.get('sni') || url.hostname,
+      fingerprint,
+      alpn,
+      echConfig,
+      echPqEnabled,
+      reality: realityOptions,
+      host: params.get('host'),
+      path: params.get('path'),
+      serviceName: params.get('serviceName') || params.get('service_name'),
+      grpcMode: params.get('mode'),
+      packetEncoding,
+      allowInsecure,
+    });
+
+    const user = {
+      id: uuid,
+      encryption: params.get('encryption') || 'none',
+      flow: params.get('flow') || undefined,
+      level: params.get('level') ? parseInt(params.get('level')!, 10) : undefined,
+      email: params.get('email') || undefined,
+      security: 'auto',
     };
+
+    const outbound: VlessOutbound = {
+      tag,
+      protocol: 'vless',
+      settings: {
+        vnext: [
+          {
+            address: url.hostname,
+            port,
+            users: [user],
+          },
+        ],
+      },
+    };
+
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
+    }
+
+    return outbound;
   } catch (error) {
     console.error('Error parsing Vless link:', error);
     return null;
   }
 };
 
-export const parseShadowsocksLink = (link: string): object | null => {
+export const parseShadowsocksLink = (link: string): ShadowsocksOutbound | null => {
   try {
     if (!link.startsWith('ss://')) return null;
 
     const url = new URL(link);
-    const [base64Part, serverPart] = url.username.split('@');
-    
-    if (!base64Part) return null;
-
-    let decodedString: string;
-    try {
-      decodedString = atob(base64Part);
-    } catch (e) {
-      return null;
-    }
-
-    const [method, password] = decodedString.split(':');
-    if (!method || !password) return null;
+    const tag = decodeURIComponent(url.hash.replace('#', '') || 'shadowsocks-link');
 
     const server = url.hostname;
     const port = parseInt(url.port, 10);
-    const tag = decodeURIComponent(url.hash.replace('#', '') || 'shadowsocks-link');
-    
-    const params = Object.fromEntries(url.searchParams);
-    
-    // Keep original fingerprint value
-    const fingerprint = params.fp || 'chrome';
 
-    const result: any = {
-      type: "shadowsocks",
-      tag: tag,
-      server: server,
-      server_port: port,
-      method: method,
-      password: password
-    };
+    if (!server || Number.isNaN(port)) {
+      return null;
+    }
 
-    if (params.plugin) {
-      const [pluginName, ...pluginOpts] = params.plugin.split(';');
-      result.plugin = pluginName;
-      
-      switch (pluginName) {
-        case 'v2ray-plugin':
-        case 'xray-plugin':
-          const pluginParams = new URLSearchParams(pluginOpts.join(';'));
-          
-          if (pluginParams.get('tls') === 'true') {
-            result.tls = buildTlsConfig(
-              'tls', 
-              pluginParams.get('host') || server,
-              fingerprint
-            );
-          }
+    let method: string | undefined;
+    let password: string | undefined;
 
-          result.transport = buildTransportConfig(
-            pluginParams.get('mode') || 'ws',
-            pluginParams.get('path'),
-            pluginParams.get('host')
-          );
-          break;
-
-        case 'obfs-local':
-          const obfsParams = new URLSearchParams(pluginOpts.join(';'));
-          result.plugin_opts = {
-            mode: obfsParams.get('obfs') || 'http',
-            host: obfsParams.get('obfs-host') || ''
-          };
-          break;
+    if (url.username && url.password) {
+      method = decodeURIComponent(url.username);
+      password = decodeURIComponent(url.password);
+    } else if (url.username) {
+      try {
+        const decoded = atob(url.username);
+        const [decodedMethod, decodedPassword] = decoded.split(':');
+        if (decodedMethod && decodedPassword) {
+          method = decodedMethod;
+          password = decodedPassword;
+        }
+      } catch (error) {
+        console.error('Unable to decode Shadowsocks credentials:', error);
       }
     }
 
-    if (params.security === 'tls') {
-      result.tls = buildTlsConfig(
-        'tls',
-        params.sni || server,
-        fingerprint
-      );
+    if (!method || !password) {
+      const withoutScheme = link.replace(/^ss:\/\//, '');
+      const mainSection = withoutScheme.split('#')[0].split('?')[0];
+      const credentialPart = mainSection.includes('@')
+        ? mainSection.split('@')[0]
+        : mainSection;
+
+      try {
+        const decoded = atob(credentialPart);
+        const [decodedMethod, rest] = decoded.split(':');
+        const [decodedPassword] = rest ? rest.split('@') : [];
+        if (decodedMethod && decodedPassword) {
+          method = decodedMethod;
+          password = decodedPassword;
+        }
+      } catch (error) {
+        console.error('Unable to decode Shadowsocks credentials from fallback:', error);
+      }
     }
 
-    if (params.type) {
-      result.transport = buildTransportConfig(
-        params.type,
-        params.path,
-        params.host
-      );
+    if (!method || !password) {
+      return null;
     }
 
-    return result;
+    const params = new URLSearchParams(url.search);
+    const pluginParam = params.get('plugin');
+    let plugin: string | undefined;
+    let pluginOptions: Record<string, string> | undefined;
+
+    if (pluginParam) {
+      const segments = pluginParam.split(';');
+      plugin = segments.shift() || undefined;
+
+      const options: Record<string, string> = {};
+      segments.forEach((segment) => {
+        if (!segment) return;
+        const [key, value] = segment.split('=');
+        if (key) {
+          options[key] = value ?? '';
+        }
+      });
+
+      if (Object.keys(options).length > 0) {
+        pluginOptions = options;
+      }
+    }
+
+    const fp = params.get('fp') || undefined;
+    const allowInsecure = parseBooleanParam(
+      params.get('allowInsecure') || params.get('allow_insecure') || params.get('insecure'),
+    );
+
+    const streamSettings = createStreamSettings({
+      network: params.get('type') || pluginOptions?.mode || undefined,
+      security: params.get('security') || undefined,
+      serverName: params.get('sni') || server,
+      fingerprint: fp,
+      host: params.get('host') || pluginOptions?.host || null,
+      path: params.get('path') || pluginOptions?.path || null,
+      serviceName: params.get('serviceName') || params.get('service_name') || pluginOptions?.serviceName || null,
+      packetEncoding: params.get('packetEncoding') || params.get('packet_encoding') || null,
+      allowInsecure,
+    });
+
+    const outbound: ShadowsocksOutbound = {
+      tag,
+      protocol: 'shadowsocks',
+      settings: {
+        servers: [
+          {
+            address: server,
+            port,
+            method,
+            password,
+            plugin,
+            pluginOptions,
+          },
+        ],
+      },
+    };
+
+    if (!plugin) {
+      delete outbound.settings.servers[0].plugin;
+    }
+
+    if (!pluginOptions) {
+      delete outbound.settings.servers[0].pluginOptions;
+    }
+
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
+    }
+
+    return outbound;
   } catch (error) {
     console.error('Error parsing Shadowsocks link:', error);
     return null;
-  }
-};
-
-const buildTlsConfig = (
-  security: string | undefined, 
-  serverName: string | undefined,
-  fingerprint?: string
-): TlsConfig => {
-  return {
-    enabled: security === "tls",
-    server_name: serverName || "",
-    insecure: false,
-    alpn: ["h2", "http/1.1"],
-    min_version: "1.2",
-    max_version: "1.3",
-    cipher_suites: [
-      "TLS_AES_128_GCM_SHA256",
-      "TLS_AES_256_GCM_SHA384",
-      "TLS_CHACHA20_POLY1305_SHA256",
-      "ECDHE-ECDSA-AES128-GCM-SHA256",
-      "ECDHE-RSA-AES128-GCM-SHA256",
-      "ECDHE-ECDSA-AES256-GCM-SHA384",
-      "ECDHE-RSA-AES256-GCM-SHA384",
-      "ECDHE-ECDSA-CHACHA20-POLY1305",
-      "ECDHE-RSA-CHACHA20-POLY1305",
-      "ECDHE-ECDSA-AES128-SHA256",
-      "ECDHE-RSA-AES128-SHA256"
-    ],
-    utls: security === "tls" ? {
-      enabled: true,
-      fingerprint: fingerprint || randomUTlsFingerprint()
-    } : undefined
-  };
-};
-
-const buildTransportConfig = (
-  type: string, 
-  path?: string, 
-  host?: string,
-  serviceName?: string
-): TransportConfig => {
-  switch (type.toLowerCase()) {
-    case "ws":
-    case "websocket":
-      return {
-        type: "ws",
-        path: path || "/",
-        headers: {
-          Host: host || ""
-        }
-      };
-
-    case "http":
-    case "h2":
-      return {
-        type: "http",
-        path: path || "/",
-        headers: {
-          Host: host || ""
-        }
-      };
-
-    case "grpc":
-      return {
-        type: "grpc",
-        service_name: serviceName || path || "defaultService",
-        idle_timeout: "15s",
-        ping_timeout: "15s",
-        permit_without_stream: false
-      };
-
-    case "tcp":
-      return {
-        type: "tcp"
-      };
-
-    default:
-      return {
-        type: type || "tcp"
-      };
-  }
-};
-
-// 在所有接口定义和现有函数的后面添加以下代码
-
-// 创建选择器出站配置
-const createSelectorOutbounds = (proxyConfigs: any[]): any[] => {
-  const proxyTags = proxyConfigs.map(config => config.tag);
-  
-  return [
-    {
-      default: proxyTags[0],
-      outbounds: [...proxyTags, "🏎️Auto"],
-      tag: "🌐代理",
-      type: "selector"
-    },
-    {
-      default: "➡️直连",
-      outbounds: ["➡️直连", "🌐代理"],
-      tag: "🇨🇳国内",
-      type: "selector"
-    },
-    {
-      outbounds: proxyTags,
-      interval: "3m",
-      tag: "🏎️Auto",
-      type: "urltest",
-      interrupt_exist_connections: false,
-      url: "https://www.gstatic.com/generate_204",
-      tolerance: 50
-    },
-    {
-      default: "block",
-      outbounds: [...proxyTags, "block"],
-      tag: "🏄🏼‍♀️UDP",
-      type: "selector"
-    }
-  ];
-};
-
-
-export const handleLinks = (links: string[]): string => {
-  try {
-    // Parse all links into proxy configurations
-    const proxyConfigs = links
-      .map(link => parseLink(link))
-      .filter(config => config !== null);
-
-    if (proxyConfigs.length === 0) {
-      throw new Error('No valid proxy configurations found');
-    }
-
-    // Create the full configuration
-    const fullConfig = createFullConfig(proxyConfigs);
-
-    // Return the full configuration as a formatted JSON string
-    return JSON.stringify(fullConfig, null, 2);
-  } catch (error) {
-    console.error('Error handling links:', error);
-    return '';
   }
 };
