@@ -3,7 +3,7 @@ import { CopyIcon, CheckIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ConfigDisplayProps {
-  config: object | null;
+  config: string | null;
 }
 
 export const ConfigDisplay: React.FC<ConfigDisplayProps> = ({ config }) => {
@@ -11,7 +11,7 @@ export const ConfigDisplay: React.FC<ConfigDisplayProps> = ({ config }) => {
 
   const handleCopy = () => {
     if (config) {
-      navigator.clipboard.writeText(JSON.stringify(config, null, 2));
+      navigator.clipboard.writeText(config);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -61,7 +61,7 @@ export const ConfigDisplay: React.FC<ConfigDisplayProps> = ({ config }) => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm"
         >
-          {JSON.stringify(config, null, 2)}
+          {config}
         </motion.pre>
       </motion.div>
     </AnimatePresence>
