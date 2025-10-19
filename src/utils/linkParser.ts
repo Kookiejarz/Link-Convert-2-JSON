@@ -1,83 +1,92 @@
-export type ParsedLink = ParsedVmessLink | ParsedVlessLink | ParsedShadowsocksLink;
+export type ParsedLink = VmessOutbound | VlessOutbound | ShadowsocksOutbound;
 
-interface ParsedLinkBase {
-  type: 'vmess' | 'vless' | 'shadowsocks';
+interface OutboundBase {
   tag: string;
-  server: string;
-  port: number;
+  protocol: 'vmess' | 'vless' | 'shadowsocks';
+  streamSettings?: StreamSettings;
 }
 
-export interface ParsedTlsConfig {
-  security: 'tls' | 'reality';
-  serverName?: string;
-  fingerprint?: string;
-  alpn?: string[];
-  ech?: {
-    config: string;
-    pqSignatureSchemesEnabled?: boolean;
+export interface VmessOutbound extends OutboundBase {
+  protocol: 'vmess';
+  settings: {
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        alterId: number;
+        security: string;
+        encryption?: string;
+        level?: number;
+        email?: string;
+      }>;
+    }>;
   };
-  reality?: RealitySettings;
 }
 
-export interface RealitySettings {
-  publicKey?: string;
-  shortId?: string;
-  spiderX?: string;
+export interface VlessOutbound extends OutboundBase {
+  protocol: 'vless';
+  settings: {
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        encryption: string;
+        flow?: string;
+        level?: number;
+        email?: string;
+        security?: string;
+      }>;
+    }>;
+  };
 }
 
-export interface ParsedTransportConfig {
-  type: string;
-  host?: string;
-  path?: string;
-  serviceName?: string;
+export interface ShadowsocksOutbound extends OutboundBase {
+  protocol: 'shadowsocks';
+  settings: {
+    servers: Array<{
+      address: string;
+      port: number;
+      method: string;
+      password: string;
+      plugin?: string;
+      pluginOptions?: Record<string, string>;
+    }>;
+  };
 }
 
-export interface ParsedVmessLink extends ParsedLinkBase {
-  type: 'vmess';
-  uuid: string;
-  security: string;
-  alterId: number;
+export interface StreamSettings {
   network?: string;
-  encryption?: string;
-  tls?: ParsedTlsConfig;
-  transport?: ParsedTransportConfig;
-}
-
-export interface ParsedVlessLink extends ParsedLinkBase {
-  type: 'vless';
-  uuid: string;
-  encryption: string;
-  security?: string;
-  flow?: string;
+  security?: 'tls' | 'reality';
+  tlsSettings?: {
+    serverName?: string;
+    fingerprint?: string;
+    alpn?: string[];
+    allowInsecure?: boolean;
+    ech?: string;
+    enableEchPq?: boolean;
+  };
+  realitySettings?: {
+    serverName?: string;
+    fingerprint?: string;
+    publicKey?: string;
+    shortId?: string;
+    spiderX?: string;
+    show?: boolean;
+    dest?: string;
+    mport?: string;
+    mldsa65Verify?: string;
+  };
+  wsSettings?: {
+    path?: string;
+    headers?: Record<string, string>;
+  };
+  grpcSettings?: {
+    serviceName?: string;
+    mode?: string;
+  };
   packetEncoding?: string;
-  sni?: string;
-  fingerprint?: string;
-  alpn?: string[];
-  ech?: string;
-  echPqEnabled?: boolean;
-  reality?: RealitySettings;
-  tls?: ParsedTlsConfig;
-  transport?: ParsedTransportConfig;
-}
-
-export interface ParsedShadowsocksLink extends ParsedLinkBase {
-  type: 'shadowsocks';
-  method: string;
-  password: string;
-  plugin?: string;
-  pluginOptions?: Record<string, string>;
-  tls?: ParsedTlsConfig;
-  transport?: ParsedTransportConfig;
-}
-
-interface BuildTlsOptions {
-  security?: string;
-  serverName?: string;
-  fingerprint?: string;
-  alpn?: string[];
-  echConfig?: string;
-  echPqEnabled?: boolean;
-  reality?: RealitySettings;
 }
 
 interface VmessConfig {
@@ -97,11 +106,18 @@ interface VmessConfig {
   scy?: string;
   alpn?: string | string[];
   security?: string;
+  level?: number;
+  email?: string;
+  allowInsecure?: string | boolean;
 }
 
-const parseBooleanParam = (value?: string | null): boolean | undefined => {
+const parseBooleanParam = (value?: string | boolean | null): boolean | undefined => {
   if (value === null || value === undefined) {
     return undefined;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
   }
 
   const normalized = value.trim().toLowerCase();
@@ -135,111 +151,160 @@ const normalizeAlpn = (value?: string | string[] | null): string[] | undefined =
   return segments.length > 0 ? segments : undefined;
 };
 
-const buildTlsConfig = ({
-  security,
-  serverName,
-  fingerprint,
-  alpn,
-  echConfig,
-  echPqEnabled,
-  reality,
-}: BuildTlsOptions): ParsedTlsConfig | undefined => {
-  if (!security) {
-    return undefined;
-  }
-
-  const normalizedSecurity = security.toLowerCase();
-
-  if (normalizedSecurity !== 'tls' && normalizedSecurity !== 'reality') {
-    return undefined;
-  }
-
-  const tlsConfig: ParsedTlsConfig = {
-    security: normalizedSecurity,
+const createStreamSettings = (options: {
+  network?: string | null;
+  security?: string | null;
+  serverName?: string | null;
+  fingerprint?: string | null;
+  alpn?: string[] | undefined;
+  echConfig?: string | null;
+  echPqEnabled?: boolean | undefined;
+  reality?: {
+    publicKey?: string | null;
+    shortId?: string | null;
+    spiderX?: string | null;
+    show?: boolean | undefined;
+    dest?: string | null;
+    mport?: string | null;
+    mldsa65Verify?: string | null;
   };
+  host?: string | null;
+  path?: string | null;
+  serviceName?: string | null;
+  grpcMode?: string | null;
+  packetEncoding?: string | null;
+  allowInsecure?: boolean | undefined;
+}): StreamSettings | undefined => {
+  const streamSettings: StreamSettings = {};
 
-  if (serverName) {
-    tlsConfig.serverName = serverName;
+  const networkValue = options.network?.toLowerCase();
+  const network = networkValue === 'websocket' ? 'ws' : networkValue;
+  if (network) {
+    streamSettings.network = network;
   }
 
-  if (fingerprint) {
-    tlsConfig.fingerprint = fingerprint;
+  if (options.packetEncoding) {
+    streamSettings.packetEncoding = options.packetEncoding;
   }
 
-  if (alpn && alpn.length > 0) {
-    tlsConfig.alpn = alpn;
-  }
+  if (network === 'ws') {
+    const wsSettings: StreamSettings['wsSettings'] = {};
 
-  if (echConfig) {
-    tlsConfig.ech = {
-      config: echConfig,
-    };
+    if (options.path) {
+      wsSettings.path = options.path;
+    }
 
-    if (echPqEnabled !== undefined) {
-      tlsConfig.ech.pqSignatureSchemesEnabled = echPqEnabled;
+    if (options.host) {
+      wsSettings.headers = { Host: options.host };
+    }
+
+    if (Object.keys(wsSettings).length > 0) {
+      streamSettings.wsSettings = wsSettings;
     }
   }
 
-  if (normalizedSecurity === 'reality' && reality) {
-    const realityConfig: RealitySettings = {};
+  if (network === 'grpc') {
+    const grpcSettings: StreamSettings['grpcSettings'] = {};
 
-    if (reality.publicKey) {
-      realityConfig.publicKey = reality.publicKey;
+    if (options.serviceName) {
+      grpcSettings.serviceName = options.serviceName;
     }
 
-    if (reality.shortId) {
-      realityConfig.shortId = reality.shortId;
+    if (options.grpcMode) {
+      grpcSettings.mode = options.grpcMode;
     }
 
-    if (reality.spiderX) {
-      realityConfig.spiderX = reality.spiderX;
-    }
-
-    if (Object.keys(realityConfig).length > 0) {
-      tlsConfig.reality = realityConfig;
+    if (Object.keys(grpcSettings).length > 0) {
+      streamSettings.grpcSettings = grpcSettings;
     }
   }
 
-  return tlsConfig;
-};
+  const security = options.security?.toLowerCase();
+  if (security === 'tls' || security === 'reality') {
+    streamSettings.security = security;
+  }
 
-const buildTransportConfig = (
-  type?: string | null,
-  path?: string | null,
-  host?: string | null,
-  serviceName?: string | null,
-): ParsedTransportConfig | undefined => {
-  if (!type) {
+  if (security === 'tls') {
+    const tlsSettings: NonNullable<StreamSettings['tlsSettings']> = {};
+
+    if (options.serverName) {
+      tlsSettings.serverName = options.serverName;
+    }
+
+    if (options.fingerprint) {
+      tlsSettings.fingerprint = options.fingerprint;
+    }
+
+    if (options.alpn && options.alpn.length > 0) {
+      tlsSettings.alpn = options.alpn;
+    }
+
+    if (options.allowInsecure !== undefined) {
+      tlsSettings.allowInsecure = options.allowInsecure;
+    }
+
+    if (options.echConfig) {
+      tlsSettings.ech = options.echConfig;
+
+      if (options.echPqEnabled !== undefined) {
+        tlsSettings.enableEchPq = options.echPqEnabled;
+      }
+    }
+
+    if (Object.keys(tlsSettings).length > 0) {
+      streamSettings.tlsSettings = tlsSettings;
+    }
+  }
+
+  if (security === 'reality') {
+    const realitySettings: NonNullable<StreamSettings['realitySettings']> = {};
+
+    if (options.serverName) {
+      realitySettings.serverName = options.serverName;
+    }
+
+    if (options.fingerprint) {
+      realitySettings.fingerprint = options.fingerprint;
+    }
+
+    if (options.reality?.publicKey) {
+      realitySettings.publicKey = options.reality.publicKey;
+    }
+
+    if (options.reality?.shortId) {
+      realitySettings.shortId = options.reality.shortId;
+    }
+
+    if (options.reality?.spiderX) {
+      realitySettings.spiderX = options.reality.spiderX;
+    }
+
+    if (options.reality?.show !== undefined) {
+      realitySettings.show = options.reality.show;
+    }
+
+    if (options.reality?.dest) {
+      realitySettings.dest = options.reality.dest;
+    }
+
+    if (options.reality?.mport) {
+      realitySettings.mport = options.reality.mport;
+    }
+
+    if (options.reality?.mldsa65Verify) {
+      realitySettings.mldsa65Verify = options.reality.mldsa65Verify;
+    }
+
+    if (Object.keys(realitySettings).length > 0) {
+      streamSettings.realitySettings = realitySettings;
+    }
+  }
+
+  if (Object.keys(streamSettings).length === 0) {
     return undefined;
   }
 
-  const normalized = type.trim().toLowerCase();
-  if (!normalized) {
-    return undefined;
-  }
-
-  let transportType = normalized;
-  if (normalized === 'websocket') {
-    transportType = 'ws';
-  }
-
-  const transport: ParsedTransportConfig = {
-    type: transportType,
-  };
-
-  if (host) {
-    transport.host = host;
-  }
-
-  if (path) {
-    transport.path = path;
-  }
-
-  if (serviceName) {
-    transport.serviceName = serviceName;
-  }
-
-  return transport;
+  return streamSettings;
 };
 
 export const parseLink = (link: string): ParsedLink | null => {
@@ -258,7 +323,7 @@ export const parseLink = (link: string): ParsedLink | null => {
   return null;
 };
 
-export const parseVmessLink = (link: string): ParsedVmessLink | null => {
+export const parseVmessLink = (link: string): VmessOutbound | null => {
   try {
     if (!link.startsWith('vmess://')) return null;
 
@@ -272,56 +337,56 @@ export const parseVmessLink = (link: string): ParsedVmessLink | null => {
     }
 
     const security = (vmessConfig.security ?? 'auto').toLowerCase();
-    const fingerprint = vmessConfig.fp || vmessConfig.type;
+    const fingerprint = vmessConfig.fp || vmessConfig.type || undefined;
+    const alpn = normalizeAlpn(vmessConfig.alpn ?? null);
+    const allowInsecure = parseBooleanParam(vmessConfig.allowInsecure ?? null);
 
-    const tls = buildTlsConfig({
-      security: vmessConfig.tls,
+    const streamSettings = createStreamSettings({
+      network: vmessConfig.net || 'tcp',
+      security: vmessConfig.tls || undefined,
       serverName: vmessConfig.sni || vmessConfig.host || vmessConfig.add,
       fingerprint,
-      alpn: normalizeAlpn(vmessConfig.alpn ?? null),
+      alpn,
+      allowInsecure,
+      host: vmessConfig.host || null,
+      path: vmessConfig.path || null,
     });
 
-    const transport = buildTransportConfig(
-      vmessConfig.net,
-      vmessConfig.path,
-      vmessConfig.host,
-      undefined,
-    );
-
-    const result: ParsedVmessLink = {
-      type: 'vmess',
-      tag: vmessConfig.ps || 'vmess-link',
-      server: vmessConfig.add,
-      port,
-      uuid: vmessConfig.id,
-      security,
+    const user = {
+      id: vmessConfig.id,
       alterId: parseInt(String(vmessConfig.aid ?? '0'), 10),
+      security,
+      encryption: vmessConfig.scy || undefined,
+      level: vmessConfig.level,
+      email: vmessConfig.email,
     };
 
-    if (vmessConfig.net) {
-      result.network = vmessConfig.net;
+    const outbound: VmessOutbound = {
+      tag: vmessConfig.ps || 'vmess-link',
+      protocol: 'vmess',
+      settings: {
+        vnext: [
+          {
+            address: vmessConfig.add,
+            port,
+            users: [user],
+          },
+        ],
+      },
+    };
+
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
     }
 
-    if (vmessConfig.scy) {
-      result.encryption = vmessConfig.scy;
-    }
-
-    if (tls) {
-      result.tls = tls;
-    }
-
-    if (transport) {
-      result.transport = transport;
-    }
-
-    return result;
+    return outbound;
   } catch (error) {
     console.error('Error parsing Vmess link:', error);
     return null;
   }
 };
 
-export const parseVlessLink = (link: string): ParsedVlessLink | null => {
+export const parseVlessLink = (link: string): VlessOutbound | null => {
   try {
     if (!link.startsWith('vless://')) return null;
 
@@ -346,95 +411,76 @@ export const parseVlessLink = (link: string): ParsedVlessLink | null => {
     const echPqEnabled = parseBooleanParam(
       params.get('echpq') || params.get('ech-pq') || params.get('ech_pq'),
     );
+    const allowInsecure = parseBooleanParam(
+      params.get('allowInsecure') || params.get('allow_insecure') || params.get('insecure'),
+    );
 
-    const realitySettings = security === 'reality'
+    const realityOptions = security === 'reality'
       ? {
-          publicKey: params.get('pbk') || undefined,
-          shortId: params.get('sid') || undefined,
-          spiderX: params.get('spx') || undefined,
+          publicKey: params.get('pbk'),
+          shortId: params.get('sid'),
+          spiderX: params.get('spx'),
+          show: parseBooleanParam(params.get('show')),
+          dest: params.get('dest'),
+          mport: params.get('mport'),
+          mldsa65Verify: params.get('mldsa65Verify'),
         }
       : undefined;
 
-    const tls = buildTlsConfig({
+    const packetEncoding = params.get('packetEncoding') || params.get('packet_encoding') || null;
+
+    const streamSettings = createStreamSettings({
+      network: params.get('type') || params.get('transport') || 'tcp',
       security,
       serverName: params.get('sni') || url.hostname,
       fingerprint,
       alpn,
       echConfig,
       echPqEnabled,
-      reality: realitySettings,
+      reality: realityOptions,
+      host: params.get('host'),
+      path: params.get('path'),
+      serviceName: params.get('serviceName') || params.get('service_name'),
+      grpcMode: params.get('mode'),
+      packetEncoding,
+      allowInsecure,
     });
 
-    const transport = buildTransportConfig(
-      params.get('type') || params.get('transport'),
-      params.get('path'),
-      params.get('host'),
-      params.get('serviceName') || params.get('service_name'),
-    );
-
-    const packetEncoding = params.get('packetEncoding') || params.get('packet_encoding') || undefined;
-
-    const result: ParsedVlessLink = {
-      type: 'vless',
-      tag,
-      server: url.hostname,
-      port,
-      uuid,
+    const user = {
+      id: uuid,
       encryption: params.get('encryption') || 'none',
+      flow: params.get('flow') || undefined,
+      level: params.get('level') ? parseInt(params.get('level')!, 10) : undefined,
+      email: params.get('email') || undefined,
+      security: 'auto',
     };
 
-    if (security) {
-      result.security = security;
+    const outbound: VlessOutbound = {
+      tag,
+      protocol: 'vless',
+      settings: {
+        vnext: [
+          {
+            address: url.hostname,
+            port,
+            users: [user],
+          },
+        ],
+      },
+    };
+
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
     }
 
-    if (params.get('flow')) {
-      result.flow = params.get('flow') || undefined;
-    }
-
-    if (packetEncoding) {
-      result.packetEncoding = packetEncoding;
-    }
-
-    if (params.get('sni')) {
-      result.sni = params.get('sni') || undefined;
-    }
-
-    if (fingerprint) {
-      result.fingerprint = fingerprint;
-    }
-
-    if (alpn) {
-      result.alpn = alpn;
-    }
-
-    if (echConfig) {
-      result.ech = echConfig;
-    }
-
-    if (echPqEnabled !== undefined) {
-      result.echPqEnabled = echPqEnabled;
-    }
-
-    if (realitySettings && Object.values(realitySettings).some(Boolean)) {
-      result.reality = realitySettings;
-    }
-
-    if (tls) {
-      result.tls = tls;
-    }
-
-    if (transport) {
-      result.transport = transport;
-    }
-
-    return result;
+    return outbound;
   } catch (error) {
     console.error('Error parsing Vless link:', error);
     return null;
   }
 };
 
-export const parseShadowsocksLink = (link: string): ParsedShadowsocksLink | null => {
+export const parseShadowsocksLink = (link: string): ShadowsocksOutbound | null => {
   try {
     if (!link.startsWith('ss://')) return null;
 
@@ -515,54 +561,52 @@ export const parseShadowsocksLink = (link: string): ParsedShadowsocksLink | null
     }
 
     const fp = params.get('fp') || undefined;
+    const allowInsecure = parseBooleanParam(
+      params.get('allowInsecure') || params.get('allow_insecure') || params.get('insecure'),
+    );
 
-    let tls = buildTlsConfig({
+    const streamSettings = createStreamSettings({
+      network: params.get('type') || pluginOptions?.mode || undefined,
       security: params.get('security') || undefined,
       serverName: params.get('sni') || server,
       fingerprint: fp,
+      host: params.get('host') || pluginOptions?.host || null,
+      path: params.get('path') || pluginOptions?.path || null,
+      serviceName: params.get('serviceName') || params.get('service_name') || pluginOptions?.serviceName || null,
+      packetEncoding: params.get('packetEncoding') || params.get('packet_encoding') || null,
+      allowInsecure,
     });
 
-    if (!tls && pluginOptions && pluginOptions.tls === 'true') {
-      tls = buildTlsConfig({
-        security: 'tls',
-        serverName: pluginOptions.host || server,
-        fingerprint: fp,
-      });
-    }
-
-    const transport = buildTransportConfig(
-      params.get('type') || pluginOptions?.mode || null,
-      params.get('path') || pluginOptions?.path || null,
-      params.get('host') || pluginOptions?.host || null,
-      params.get('serviceName') || params.get('service_name') || pluginOptions?.serviceName || null,
-    );
-
-    const result: ParsedShadowsocksLink = {
-      type: 'shadowsocks',
+    const outbound: ShadowsocksOutbound = {
       tag,
-      server,
-      port,
-      method,
-      password,
+      protocol: 'shadowsocks',
+      settings: {
+        servers: [
+          {
+            address: server,
+            port,
+            method,
+            password,
+            plugin,
+            pluginOptions,
+          },
+        ],
+      },
     };
 
-    if (plugin) {
-      result.plugin = plugin;
+    if (!plugin) {
+      delete outbound.settings.servers[0].plugin;
     }
 
-    if (pluginOptions) {
-      result.pluginOptions = pluginOptions;
+    if (!pluginOptions) {
+      delete outbound.settings.servers[0].pluginOptions;
     }
 
-    if (tls) {
-      result.tls = tls;
+    if (streamSettings) {
+      outbound.streamSettings = streamSettings;
     }
 
-    if (transport) {
-      result.transport = transport;
-    }
-
-    return result;
+    return outbound;
   } catch (error) {
     console.error('Error parsing Shadowsocks link:', error);
     return null;
