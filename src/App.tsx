@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseLink } from './utils/linkParser';
+import { parseLink, createFullConfig } from './utils/linkParser';
 import { ConfigDisplay } from './components/ConfigDisplay';
 import { AnimatedContainer } from './components/AnimatedContainer';
 import { FloatingSymbols } from './components/FloatingSymbols';
@@ -11,24 +11,40 @@ import { ConvertButton } from './components/ConvertButton';
 
 function App() {
   const [link, setLink] = useState('');
-  const [config, setConfig] = useState<object | null>(null);
+  const [config, setConfig] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const handleConvert = () => {
     setError('');
     setConfig(null);
 
-    if (!link) {
-      setError('Please enter a link');
+    const rawLinks = link
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+
+    if (rawLinks.length === 0) {
+      setError('Please enter at least one link');
       return;
     }
 
-    const result = parseLink(link);
-    if (result) {
-      setConfig(result);
-    } else {
-      setError('Invalid link format');
+    const parsedLinks = rawLinks.map((entry) => ({
+      entry,
+      config: parseLink(entry),
+    }));
+
+    const invalidLinks = parsedLinks.filter((item) => item.config === null);
+
+    if (invalidLinks.length > 0) {
+      setError('Invalid link format detected. Please verify your input.');
+      return;
     }
+
+    const fullConfig = createFullConfig(
+      parsedLinks.map((item) => item.config!)
+    );
+
+    setConfig(JSON.stringify(fullConfig, null, 2));
   };
 
   return (
@@ -45,10 +61,10 @@ function App() {
             className="bg-white/90 backdrop-blur-sm rounded-xl shadow-sm p-6"
           >
             <div className="space-y-4">
-              <LinkInput 
-                link={link} 
-                setLink={setLink} 
-                placeholder="vmess:// or vless://"
+              <LinkInput
+                link={link}
+                setLink={setLink}
+                placeholder="Enter VLESS/VMESS/SS links (one per line)"
               />
 
               <AnimatePresence mode="wait">
