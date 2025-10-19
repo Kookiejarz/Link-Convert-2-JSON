@@ -9,39 +9,50 @@ interface OutboundBase {
 export interface VmessOutbound extends OutboundBase {
   protocol: 'vmess';
   settings: {
-    address: string;
-    port: number;
-    id: string;
-    alterId: number;
-    security: string;
-    encryption?: string;
-    level?: number;
-    email?: string;
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        alterId: number;
+        security: string;
+        encryption?: string;
+        level?: number;
+        email?: string;
+      }>;
+    }>;
   };
 }
 
 export interface VlessOutbound extends OutboundBase {
   protocol: 'vless';
   settings: {
-    address: string;
-    port: number;
-    id: string;
-    encryption: string;
-    flow?: string;
-    level?: number;
-    email?: string;
+    vnext: Array<{
+      address: string;
+      port: number;
+      users: Array<{
+        id: string;
+        encryption: string;
+        flow?: string;
+        level?: number;
+        email?: string;
+        security?: string;
+      }>;
+    }>;
   };
 }
 
 export interface ShadowsocksOutbound extends OutboundBase {
   protocol: 'shadowsocks';
   settings: {
-    address: string;
-    port: number;
-    method: string;
-    password: string;
-    plugin?: string;
-    pluginOptions?: Record<string, string>;
+    servers: Array<{
+      address: string;
+      port: number;
+      method: string;
+      password: string;
+      plugin?: string;
+      pluginOptions?: Record<string, string>;
+    }>;
   };
 }
 
@@ -66,11 +77,6 @@ export interface StreamSettings {
     dest?: string;
     mport?: string;
     mldsa65Verify?: string;
-  };
-  tcpSettings?: {
-    header?: {
-      type?: string;
-    };
   };
   wsSettings?: {
     path?: string;
@@ -145,17 +151,6 @@ const normalizeAlpn = (value?: string | string[] | null): string[] | undefined =
   return segments.length > 0 ? segments : undefined;
 };
 
-const getFirstParam = (params: URLSearchParams, ...keys: string[]): string | null => {
-  for (const key of keys) {
-    const value = params.get(key);
-    if (value !== null) {
-      return value;
-    }
-  }
-
-  return null;
-};
-
 const createStreamSettings = (options: {
   network?: string | null;
   security?: string | null;
@@ -179,7 +174,6 @@ const createStreamSettings = (options: {
   grpcMode?: string | null;
   packetEncoding?: string | null;
   allowInsecure?: boolean | undefined;
-  tcpHeaderType?: string | null;
 }): StreamSettings | undefined => {
   const streamSettings: StreamSettings = {};
 
@@ -222,13 +216,6 @@ const createStreamSettings = (options: {
 
     if (Object.keys(grpcSettings).length > 0) {
       streamSettings.grpcSettings = grpcSettings;
-    }
-  }
-
-  if (!network || network === 'tcp') {
-    const headerType = options.tcpHeaderType || (network === 'tcp' ? 'none' : undefined);
-    if (headerType) {
-      streamSettings.tcpSettings = { header: { type: headerType } };
     }
   }
 
@@ -363,21 +350,28 @@ export const parseVmessLink = (link: string): VmessOutbound | null => {
       allowInsecure,
       host: vmessConfig.host || null,
       path: vmessConfig.path || null,
-      tcpHeaderType: vmessConfig.type || null,
     });
+
+    const user = {
+      id: vmessConfig.id,
+      alterId: parseInt(String(vmessConfig.aid ?? '0'), 10),
+      security,
+      encryption: vmessConfig.scy || undefined,
+      level: vmessConfig.level,
+      email: vmessConfig.email,
+    };
 
     const outbound: VmessOutbound = {
       tag: vmessConfig.ps || 'vmess-link',
       protocol: 'vmess',
       settings: {
-        address: vmessConfig.add,
-        port,
-        id: vmessConfig.id,
-        alterId: parseInt(String(vmessConfig.aid ?? '0'), 10),
-        security,
-        encryption: vmessConfig.scy || undefined,
-        level: vmessConfig.level,
-        email: vmessConfig.email,
+        vnext: [
+          {
+            address: vmessConfig.add,
+            port,
+            users: [user],
+          },
+        ],
       },
     };
 
@@ -429,18 +423,11 @@ export const parseVlessLink = (link: string): VlessOutbound | null => {
           show: parseBooleanParam(params.get('show')),
           dest: params.get('dest'),
           mport: params.get('mport'),
-          mldsa65Verify: getFirstParam(
-            params,
-            'mldsa65Verify',
-            'mldsa65verify',
-            'pqv',
-            'PQV',
-          ),
+          mldsa65Verify: params.get('mldsa65Verify'),
         }
       : undefined;
 
     const packetEncoding = params.get('packetEncoding') || params.get('packet_encoding') || null;
-    const tcpHeaderType = params.get('headerType') || params.get('header_type') || params.get('header');
 
     const streamSettings = createStreamSettings({
       network: params.get('type') || params.get('transport') || 'tcp',
@@ -457,20 +444,28 @@ export const parseVlessLink = (link: string): VlessOutbound | null => {
       grpcMode: params.get('mode'),
       packetEncoding,
       allowInsecure,
-      tcpHeaderType,
     });
+
+    const user = {
+      id: uuid,
+      encryption: params.get('encryption') || 'none',
+      flow: params.get('flow') || undefined,
+      level: params.get('level') ? parseInt(params.get('level')!, 10) : undefined,
+      email: params.get('email') || undefined,
+      security: 'auto',
+    };
 
     const outbound: VlessOutbound = {
       tag,
       protocol: 'vless',
       settings: {
-        address: url.hostname,
-        port,
-        id: uuid,
-        encryption: params.get('encryption') || 'none',
-        flow: params.get('flow') || undefined,
-        level: params.get('level') ? parseInt(params.get('level')!, 10) : undefined,
-        email: params.get('email') || undefined,
+        vnext: [
+          {
+            address: url.hostname,
+            port,
+            users: [user],
+          },
+        ],
       },
     };
 
@@ -586,21 +581,25 @@ export const parseShadowsocksLink = (link: string): ShadowsocksOutbound | null =
       tag,
       protocol: 'shadowsocks',
       settings: {
-        address: server,
-        port,
-        method,
-        password,
-        plugin,
-        pluginOptions,
+        servers: [
+          {
+            address: server,
+            port,
+            method,
+            password,
+            plugin,
+            pluginOptions,
+          },
+        ],
       },
     };
 
     if (!plugin) {
-      delete outbound.settings.plugin;
+      delete outbound.settings.servers[0].plugin;
     }
 
     if (!pluginOptions) {
-      delete outbound.settings.pluginOptions;
+      delete outbound.settings.servers[0].pluginOptions;
     }
 
     if (streamSettings) {
