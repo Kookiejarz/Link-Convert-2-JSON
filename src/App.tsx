@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseLink, createFullConfig } from './utils/linkParser';
+import { parseLink } from './utils/linkParser';
 import { ConfigDisplay } from './components/ConfigDisplay';
 import { AnimatedContainer } from './components/AnimatedContainer';
 import { FloatingSymbols } from './components/FloatingSymbols';
@@ -40,11 +40,10 @@ function App() {
       return;
     }
 
-    const fullConfig = createFullConfig(
-      parsedLinks.map((item) => item.config!)
-    );
+    const linkConfigs = parsedLinks.map((item) => item.config!);
+    const output = linkConfigs.length === 1 ? linkConfigs[0] : linkConfigs;
 
-    setConfig(JSON.stringify(fullConfig, null, 2));
+    setConfig(JSON.stringify(output, null, 2));
   };
 
   return (
